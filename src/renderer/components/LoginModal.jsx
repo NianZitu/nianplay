@@ -21,8 +21,10 @@ export default function LoginModal({ onClose }) {
       'auth/too-many-requests':        'Muitas tentativas. Aguarde e tente novamente.',
       'auth/network-request-failed':   'Sem conexão. Verifique sua internet.',
       'auth/invalid-credential':       'E-mail ou senha incorretos.',
+      'auth/operation-not-allowed':    'Login por e-mail não está ativado. Ative em Firebase Console → Authentication → Sign-in method → Email/senha.',
+      'auth/configuration-not-found':  'Firebase não configurado corretamente. Verifique o projeto.',
     }
-    return map[code] || 'Erro ao autenticar. Verifique os dados e tente novamente.'
+    return map[code] || `Erro (${code || 'desconhecido'}). Verifique os dados e tente novamente.`
   }
 
   async function handleSubmit(e) {

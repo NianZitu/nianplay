@@ -1,6 +1,6 @@
-import { initializeApp }         from 'firebase/app'
-import { getAuth }               from 'firebase/auth'
-import { getFirestore }          from 'firebase/firestore'
+import { initializeApp }                                       from 'firebase/app'
+import { initializeAuth, indexedDBLocalPersistence }           from 'firebase/auth'
+import { getFirestore }                                         from 'firebase/firestore'
 
 // ─── CONFIGURAÇÃO FIREBASE ───────────────────────────────────────────────────
 // 1. Acesse https://console.firebase.google.com
@@ -27,8 +27,12 @@ const firebaseConfig = {
 }
 
 const firebaseApp = initializeApp(firebaseConfig)
-export const auth = getAuth(firebaseApp)
-export const db   = getFirestore(firebaseApp)
+
+// indexedDBLocalPersistence é necessário no Electron (contextIsolation bloqueia localStorage)
+export const auth = initializeAuth(firebaseApp, {
+  persistence: indexedDBLocalPersistence,
+})
+export const db = getFirestore(firebaseApp)
 
 // Deterministic cloud ID from track or playlist fields
 export function trackCloudId(track) {

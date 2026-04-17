@@ -62,12 +62,21 @@ module.exports = function registerUpdaterHandlers(ipcMain, mainWindow) {
         a.name.endsWith('.exe') && a.name.toLowerCase().includes('setup')
       )
 
-      mainWindow.webContents.send('update:available', {
+      const payload = {
         version:     latestVer,
         notes:       release.body || '',
         downloadUrl: exeAsset?.browser_download_url || release.html_url,
         releasePage: release.html_url,
-      })
+      }
+
+      // Aguarda o renderer estar pronto antes de enviar
+      if (mainWindow.webContents.isLoading()) {
+        mainWindow.webContents.once('did-finish-load', () => {
+          setTimeout(() => mainWindow.webContents.send('update:available', payload), 1000)
+        })
+      } else {
+        mainWindow.webContents.send('update:available', payload)
+      }
     } catch (e) {
       console.log('[Updater] Check failed:', e.message)
     }
