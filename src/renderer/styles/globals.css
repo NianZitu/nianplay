@@ -1,0 +1,83 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background-color: #0d0d14;
+    color: #f1f1f5;
+    overflow: hidden;
+    user-select: none;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #3d3d62;
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #6366f1;
+  }
+}
+
+@layer components {
+  .glass {
+    @apply bg-surface-700/60 backdrop-blur-md border border-white/5;
+  }
+
+  .btn-primary {
+    @apply bg-brand-600 hover:bg-brand-500 text-white font-medium px-4 py-2 rounded-lg
+           transition-all duration-150 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+
+  .btn-ghost {
+    @apply hover:bg-white/5 text-white/70 hover:text-white px-3 py-1.5 rounded-lg
+           transition-all duration-150 active:scale-95;
+  }
+
+  .input-base {
+    @apply bg-surface-600 border border-white/10 rounded-lg px-3 py-2 text-sm text-white
+           placeholder-white/30 focus:outline-none focus:border-brand-500/60 transition-colors;
+  }
+
+  .card {
+    @apply bg-surface-800 border border-white/5 rounded-xl;
+  }
+
+  .tab-active {
+    @apply text-white bg-brand-600/20 border-b-2 border-brand-500;
+  }
+
+  .tab-inactive {
+    @apply text-white/50 hover:text-white/80 hover:bg-white/5 border-b-2 border-transparent;
+  }
+}
+
+/* Drag region for frameless window */
+.drag-region {
+  -webkit-app-region: drag;
+}
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
+/* Progress bar animation */
+@keyframes pulse-progress {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.6; }
+}
+.progress-pulse {
+  animation: pulse-progress 1.5s ease-in-out infinite;
+}

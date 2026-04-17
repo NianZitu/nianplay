@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__Claude_Preview__preview_start",
+      "Bash(node -e \"const v=JSON.parse\\(require\\(''''fs''''\\).readFileSync\\(''''/dev/stdin'''',''''utf8''''\\)\\); const major=v.filter\\(x=>parseInt\\(x\\)>=32\\).slice\\(-10\\); console.log\\(major.join\\(''''\\\\n''''\\)\\)\")",
+      "Bash(npm show:*)",
+      "Bash(node -e \"const {execSync}=require\\(''child_process''\\); try{console.log\\(execSync\\(''npm show electron@34.5.8 node_version''\\).toString\\(\\)\\)}catch\\(e\\){console.log\\(''err'',e.message\\)}\")",
+      "Bash(node -e \":*)",
+      "Bash(npm install:*)",
+      "Bash(node -e \"const e = require\\(''electron''\\); console.log\\(''electron bin:'', e\\); const {execSync} = require\\(''child_process''\\); try{const v=execSync\\(''\"\"''+e+''\"\" --version''\\).toString\\(\\).trim\\(\\); console.log\\(''version:'', v\\);}catch\\(err\\){console.log\\(''err:'',err.message\\)}\")",
+      "Bash(npx vite:*)",
+      "Bash(npx electron-builder:*)",
+      "Bash(node -e \"try{require\\(''''sharp''''\\);console.log\\(''''sharp ok''''\\)}catch\\(e\\){console.log\\(''''no sharp''''\\)}\")",
+      "Bash(node -e \"const j=require\\(''jimp''\\); console.log\\(Object.keys\\(j\\).slice\\(0,10\\)\\)\")",
+      "Bash(node -e \"const {Jimp}=require\\(''jimp''\\); console.log\\(Object.getOwnPropertyNames\\(Jimp\\)\\)\")"
+    ]
+  }
+}

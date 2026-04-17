@@ -1,0 +1,98 @@
+{
+  "name": "nianplay",
+  "version": "1.0.0",
+  "description": "Local music player with professional audio tools",
+  "main": "src/main/main.js",
+  "scripts": {
+    "start": "concurrently \"npm run vite\" \"wait-on http://localhost:5173 && npm run electron\"",
+    "vite": "vite",
+    "electron": "cross-env NODE_ENV=development electron .",
+    "build": "vite build && electron-builder --win",
+    "preview": "vite preview"
+  },
+  "keywords": [],
+  "author": "NianPlay",
+  "license": "MIT",
+  "devDependencies": {
+    "@jimp/core": "^1.6.0",
+    "@jimp/plugin-resize": "^1.6.0",
+    "@jimp/types": "^1.6.0",
+    "@vitejs/plugin-react": "^4.2.1",
+    "autoprefixer": "^10.4.17",
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
+    "electron": "^34.5.8",
+    "electron-builder": "^24.13.3",
+    "jimp": "^1.6.0",
+    "png-to-ico": "^3.0.1",
+    "postcss": "^8.4.35",
+    "tailwindcss": "^3.4.1",
+    "vite": "^5.1.4",
+    "wait-on": "^7.2.0"
+  },
+  "dependencies": {
+    "@radix-ui/react-dialog": "^1.0.5",
+    "@radix-ui/react-progress": "^1.0.3",
+    "@radix-ui/react-select": "^2.0.0",
+    "@radix-ui/react-slider": "^1.1.2",
+    "@radix-ui/react-tabs": "^1.0.4",
+    "@radix-ui/react-tooltip": "^1.0.7",
+    "electron-store": "^8.2.0",
+    "ffmpeg-static": "^5.2.0",
+    "ffprobe-static": "^3.1.0",
+    "firebase": "^12.12.0",
+    "fluent-ffmpeg": "^2.1.2",
+    "lucide-react": "^0.344.0",
+    "music-metadata": "^7.14.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "spotify-url-info": "^3.3.0",
+    "uuid": "^9.0.1",
+    "yt-dlp-wrap": "^2.3.12"
+  },
+  "build": {
+    "appId": "com.nianplay.app",
+    "productName": "NianPlay",
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/ffmpeg-static/**",
+      "node_modules/ffprobe-static/**"
+    ],
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "dist/**/*",
+      "src/main/**/*",
+      "node_modules/**/*",
+      "!node_modules/**/{test,tests,spec,__tests__,__mocks__}/**",
+      "!node_modules/**/*.{md,txt,map}"
+    ],
+    "extraResources": [],
+    "icon": "assets/icons/icon.ico",
+    "win": {
+      "icon": "assets/icons/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "NianPlay"
+    }
+  }
+}

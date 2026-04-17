@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "nianplay-renderer",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "vite"],
+      "port": 5173
+    }
+  ]
+}
