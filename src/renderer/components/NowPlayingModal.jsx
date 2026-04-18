@@ -9,34 +9,43 @@ function formatTime(secs) {
   return `${m}:${s}`
 }
 
-// Vinyl disc SVG with cover art in the center
+// Vinyl disc — cover fills the full disc, grooves overlay on top
 function VinylDisc({ cover, isPlaying }) {
   return (
     <div
-      className="relative w-64 h-64 rounded-full shadow-2xl"
+      className="relative w-64 h-64 rounded-full shadow-2xl overflow-hidden"
       style={{ animation: isPlaying ? 'spin 4s linear infinite' : 'none' }}
     >
-      {/* Outer vinyl grooves */}
-      <svg viewBox="0 0 256 256" className="absolute inset-0 w-full h-full">
-        <circle cx="128" cy="128" r="128" fill="#1a1a1a" />
-        {[120,112,104,96,88,80,72,64].map(r => (
-          <circle key={r} cx="128" cy="128" r={r} fill="none" stroke="#2a2a2a" strokeWidth="1.5" />
-        ))}
-        {/* Label area */}
-        <circle cx="128" cy="128" r="52" fill="#0d0d14" />
-        {/* Center hole */}
-        <circle cx="128" cy="128" r="6" fill="#111" />
-      </svg>
+      {/* Cover art as the disc surface */}
+      {cover
+        ? <img src={cover} alt="" className="absolute inset-0 w-full h-full object-cover" />
+        : <div className="absolute inset-0 bg-zinc-900" />
+      }
 
-      {/* Cover art clipped to label circle */}
-      <div className="absolute inset-0 flex items-center justify-center">
-        <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-white/10">
-          {cover
-            ? <img src={cover} alt="" className="w-full h-full object-cover" />
-            : <div className="w-full h-full bg-surface-700 flex items-center justify-center text-white/20 text-2xl">♪</div>
-          }
-        </div>
-      </div>
+      {/* Groove texture + center label overlay */}
+      <svg viewBox="0 0 256 256" className="absolute inset-0 w-full h-full">
+        {/* Slight dark tint so grooves read clearly over any cover */}
+        <circle cx="128" cy="128" r="128" fill="rgba(0,0,0,0.28)" />
+
+        {/* Vinyl groove rings — dark band + light shimmer pairs */}
+        {Array.from({ length: 13 }, (_, i) => {
+          const r = 62 + i * 5
+          return (
+            <g key={i}>
+              <circle cx="128" cy="128" r={r}       fill="none" stroke="rgba(0,0,0,0.48)"    strokeWidth="1.4" />
+              <circle cx="128" cy="128" r={r - 1.2} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="0.7" />
+            </g>
+          )
+        })}
+
+        {/* Center label — solid dark, normal vinyl look */}
+        <circle cx="128" cy="128" r="50" fill="#0c0c1a" />
+        <circle cx="128" cy="128" r="47" fill="none" stroke="#242438" strokeWidth="1.2" />
+        <circle cx="128" cy="128" r="43" fill="none" stroke="#1a1a2e" strokeWidth="0.6" />
+
+        {/* Center spindle hole */}
+        <circle cx="128" cy="128" r="5" fill="#050508" />
+      </svg>
     </div>
   )
 }
