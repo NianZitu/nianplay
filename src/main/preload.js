@@ -51,6 +51,11 @@ contextBridge.exposeInMainWorld('electron', {
     searchImageBrowser: (query)                       => ipcRenderer.invoke('playlists:searchImageBrowser', query),
     export:             (id)                          => ipcRenderer.invoke('playlists:export', id),
     import:             ()                            => ipcRenderer.invoke('playlists:import'),
+    toggleGroups:       (id)                          => ipcRenderer.invoke('playlists:toggleGroups', id),
+    createGroup:        (playlistId, name)            => ipcRenderer.invoke('playlists:createGroup', { playlistId, name }),
+    deleteGroup:        (groupId)                     => ipcRenderer.invoke('playlists:deleteGroup', groupId),
+    setTrackGroup:      (playlistId, trackId, groupId) => ipcRenderer.invoke('playlists:setTrackGroup', { playlistId, trackId, groupId }),
+    getGroups:          (playlistId)                  => ipcRenderer.invoke('playlists:getGroups', playlistId),
   },
 
   // Spotify

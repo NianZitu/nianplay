@@ -1,13 +1,20 @@
 import React, { useState, useEffect } from 'react'
 import { Download, X, RefreshCw, ExternalLink } from 'lucide-react'
 
+const DISMISSED_KEY = 'nianplay_update_dismissed'
+
 export default function UpdateBanner() {
-  const [update,    setUpdate]    = useState(null)   // { version, notes, downloadUrl }
+  const [update,    setUpdate]    = useState(null)
   const [dismissed, setDismissed] = useState(false)
 
   useEffect(() => {
     if (!window.electron?.updater) return
-    const unsub = window.electron.updater.onAvailable(info => setUpdate(info))
+    const unsub = window.electron.updater.onAvailable(info => {
+      // Não mostrar se o usuário já fechou o aviso para essa versão específica
+      const dismissedVer = localStorage.getItem(DISMISSED_KEY)
+      if (dismissedVer === info.version) return
+      setUpdate(info)
+    })
     return () => unsub?.()
   }, [])
 
@@ -15,6 +22,12 @@ export default function UpdateBanner() {
 
   function handleDownload() {
     window.electron.updater.openDownload(update.downloadUrl)
+  }
+
+  function handleDismiss() {
+    // Guarda qual versão foi dispensada — só volta a mostrar para versão ainda mais nova
+    localStorage.setItem(DISMISSED_KEY, update.version)
+    setDismissed(true)
   }
 
   return (
@@ -33,8 +46,9 @@ export default function UpdateBanner() {
         <ExternalLink size={11} className="opacity-60" />
       </button>
       <button
-        onClick={() => setDismissed(true)}
+        onClick={handleDismiss}
         className="text-white/30 hover:text-white/70 transition-colors shrink-0"
+        title="Dispensar"
       >
         <X size={15} />
       </button>

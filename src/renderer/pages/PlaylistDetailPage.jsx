@@ -3,7 +3,7 @@ import {
   ArrowLeft, Play, Shuffle, SlidersHorizontal, Plus,
   Trash2, Loader2, CheckCircle2, AlertCircle,
   X, Search, ExternalLink, Pencil, Check, ListPlus, Settings2, Download,
-  DownloadCloud, AlertTriangle, FolderOpen,
+  DownloadCloud, AlertTriangle, FolderOpen, Tag,
 } from 'lucide-react'
 import { usePlayer } from '../store/PlayerContext'
 import MaestroModal from '../components/MaestroModal'
@@ -553,24 +553,50 @@ function formatTotalDuration(secs) {
 }
 
 export default function PlaylistDetailPage({ playlist, onBack }) {
-  const [tracks,       setTracks]       = useState([])
-  const [search,       setSearch]       = useState('')
-  const [showEqualize, setShowEqualize] = useState(false)
-  const [showAdd,      setShowAdd]      = useState(false)
-  const [editingCover, setEditingCover] = useState(false)
-  const [coverInput,   setCoverInput]   = useState(playlist.cover_url || '')
-  const [maestroTrack, setMaestroTrack] = useState(null)
+  const [tracks,         setTracks]         = useState([])
+  const [search,         setSearch]         = useState('')
+  const [showEqualize,   setShowEqualize]   = useState(false)
+  const [showAdd,        setShowAdd]        = useState(false)
+  const [editingCover,   setEditingCover]   = useState(false)
+  const [coverInput,     setCoverInput]     = useState(playlist.cover_url || '')
+  const [maestroTrack,   setMaestroTrack]   = useState(null)
   const [exporting,      setExporting]      = useState(false)
   const [exportToast,    setExportToast]    = useState(null)
   const [showMissing,    setShowMissing]    = useState(false)
-  const { playTrack, playNext, setShuffle, currentTrack, isPlaying } = usePlayer()
+  // Groups state
+  const [groups,         setGroups]         = useState([])
+  const [groupsEnabled,  setGroupsEnabled]  = useState(playlist.groups_enabled || false)
+  const [showGroupPanel, setShowGroupPanel] = useState(false)
+  const [newGroupName,   setNewGroupName]   = useState('')
+  const [assigningTrack, setAssigningTrack] = useState(null) // track.id whose dropdown is open
+  const { playTrack, playNext, setShuffle, currentTrack, isPlaying, setQueue, queue,
+          setGroupsEnabled: setPlayerGroupsEnabled } = usePlayer()
 
   useEffect(() => { loadTracks() }, [playlist.id])
+  useEffect(() => { loadGroups() }, [playlist.id])
+  // Sync player groups setting whenever we enter this playlist page
+  useEffect(() => {
+    setPlayerGroupsEnabled(playlist.groups_enabled || false)
+  }, [playlist.id])
+
+  // Close group assignment dropdown on outside click
+  useEffect(() => {
+    if (!assigningTrack) return
+    function onDown() { setAssigningTrack(null) }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [assigningTrack])
 
   async function loadTracks() {
     if (!window.electron) return
     const t = await window.electron.playlists.getTracks(playlist.id)
     setTracks(t || [])
+  }
+
+  async function loadGroups() {
+    if (!window.electron) return
+    const g = await window.electron.playlists.getGroups(playlist.id)
+    setGroups(g || [])
   }
 
   async function handleRemove(trackId) {
@@ -579,12 +605,59 @@ export default function PlaylistDetailPage({ playlist, onBack }) {
     setTracks(prev => prev.filter(t => t.id !== trackId))
   }
 
-  function handlePlay(track) { playTrack(track, tracks) }
-  function handlePlayAll() { if (tracks.length) playTrack(tracks[0], tracks) }
+  function handlePlay(track) { setPlayerGroupsEnabled(groupsEnabled); playTrack(track, tracks) }
+  function handlePlayAll() {
+    if (!tracks.length) return
+    setPlayerGroupsEnabled(groupsEnabled)
+    playTrack(tracks[0], tracks)
+  }
   function handleShuffle() {
     if (!tracks.length) return
+    setPlayerGroupsEnabled(groupsEnabled)
     setShuffle(true)
     playTrack(tracks[Math.floor(Math.random() * tracks.length)], tracks)
+  }
+
+  async function handleToggleGroups() {
+    if (!window.electron) return
+    const updated = await window.electron.playlists.toggleGroups(playlist.id)
+    const newEnabled = updated?.groups_enabled || false
+    playlist.groups_enabled = newEnabled
+    setGroupsEnabled(newEnabled)
+    setPlayerGroupsEnabled(newEnabled)
+  }
+
+  async function handleCreateGroup() {
+    if (!window.electron || !newGroupName.trim()) return
+    const g = await window.electron.playlists.createGroup(playlist.id, newGroupName.trim())
+    setGroups(prev => [...prev, g])
+    setNewGroupName('')
+  }
+
+  async function handleDeleteGroup(groupId) {
+    if (!window.electron) return
+    await window.electron.playlists.deleteGroup(groupId)
+    setGroups(prev => prev.filter(g => g.id !== groupId))
+    setTracks(prev => prev.map(t => t.group_id === groupId ? { ...t, group_id: null, group_position: 0 } : t))
+  }
+
+  async function handleSetTrackGroup(trackId, groupId) {
+    if (!window.electron) return
+    await window.electron.playlists.setTrackGroup(playlist.id, trackId, groupId)
+    let updatedTracks
+    if (!groupId) {
+      updatedTracks = tracks.map(t => t.id === trackId ? { ...t, group_id: null, group_position: 0 } : t)
+    } else {
+      const maxPos = tracks.filter(t => t.group_id === groupId).reduce((m, t) => Math.max(m, t.group_position ?? -1), -1)
+      updatedTracks = tracks.map(t => t.id === trackId ? { ...t, group_id: groupId, group_position: maxPos + 1 } : t)
+    }
+    setTracks(updatedTracks)
+    // Sync to player queue if this playlist is currently loaded
+    if (queue.some(qt => qt.id === trackId)) {
+      const upd = updatedTracks.find(t => t.id === trackId)
+      setQueue(queue.map(qt => qt.id === trackId ? upd : qt))
+    }
+    setAssigningTrack(null)
   }
 
   async function handleExport() {
@@ -689,6 +762,17 @@ export default function PlaylistDetailPage({ playlist, onBack }) {
             <button onClick={handleExport} disabled={exporting || !tracks.length} className="btn-ghost flex items-center gap-2 text-sm px-4 py-2 disabled:opacity-40" title="Exportar playlist">
               <Download size={14} /> {exporting ? 'Exportando...' : 'Exportar'}
             </button>
+            <button
+              onClick={handleToggleGroups}
+              className={`flex items-center gap-2 text-sm px-4 py-2 rounded-lg transition-colors ${
+                groupsEnabled
+                  ? 'bg-brand-600/20 border border-brand-500/40 text-brand-300 hover:bg-brand-600/30'
+                  : 'btn-ghost text-white/60'
+              }`}
+              title={groupsEnabled ? 'Grupos ativados — clique para desativar' : 'Ativar grupos de sequência'}
+            >
+              <Tag size={14} /> Grupos{groupsEnabled ? ' ●' : ''}
+            </button>
             {(() => {
               const missing = tracks.filter(t => !t.file_path)
               return missing.length > 0 ? (
@@ -708,6 +792,73 @@ export default function PlaylistDetailPage({ playlist, onBack }) {
       {exportToast && (
         <div className="fixed bottom-24 right-6 z-50 px-4 py-2.5 rounded-xl text-sm shadow-xl bg-green-600/90 text-white">
           {exportToast}
+        </div>
+      )}
+
+      {/* Groups panel */}
+      {groupsEnabled && (
+        <div className="px-6 pb-3 shrink-0">
+          <div className="bg-surface-700/50 border border-white/8 rounded-xl p-3 flex flex-col gap-2.5">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-medium text-brand-300 flex items-center gap-1.5">
+                <Tag size={11} /> Grupos de sequência
+              </p>
+              <button
+                onClick={() => setShowGroupPanel(p => !p)}
+                className="text-xs text-white/40 hover:text-white/70 transition-colors"
+              >
+                {showGroupPanel ? 'Fechar ↑' : 'Gerenciar ↓'}
+              </button>
+            </div>
+
+            {/* Group chips */}
+            <div className="flex flex-wrap gap-1.5">
+              {groups.map(g => (
+                <div
+                  key={g.id}
+                  className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border"
+                  style={{ borderColor: g.color + '50', backgroundColor: g.color + '18', color: g.color }}
+                >
+                  <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: g.color }} />
+                  <span>{g.name}</span>
+                  <span className="text-white/30 ml-0.5">
+                    {tracks.filter(t => t.group_id === g.id).length}
+                  </span>
+                  {showGroupPanel && (
+                    <button
+                      onClick={() => handleDeleteGroup(g.id)}
+                      className="ml-0.5 opacity-50 hover:opacity-100 transition-opacity"
+                    >
+                      <X size={10} />
+                    </button>
+                  )}
+                </div>
+              ))}
+              {groups.length === 0 && (
+                <p className="text-xs text-white/25 py-0.5">Nenhum grupo criado</p>
+              )}
+            </div>
+
+            {/* Create group input — only when panel is open */}
+            {showGroupPanel && (
+              <div className="flex gap-2 pt-0.5">
+                <input
+                  value={newGroupName}
+                  onChange={e => setNewGroupName(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleCreateGroup()}
+                  placeholder="Nome do novo grupo..."
+                  className="input-base flex-1 text-xs py-1.5"
+                />
+                <button
+                  onClick={handleCreateGroup}
+                  disabled={!newGroupName.trim()}
+                  className="btn-primary px-3 text-xs disabled:opacity-40 flex items-center gap-1"
+                >
+                  <Plus size={12} /> Criar
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -736,80 +887,151 @@ export default function PlaylistDetailPage({ playlist, onBack }) {
               </button>
             )}
           </div>
-        ) : (
-          <div className="flex flex-col gap-0.5">
-            {filteredTracks.map((track, i) => {
-              const active = currentTrack?.id === track.id
-              return (
-                <div
-                  key={track.id}
-                  onDoubleClick={() => handlePlay(track)}
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors group cursor-pointer
-                    ${active ? 'bg-brand-600/10' : 'hover:bg-white/5'}`}
-                >
-                  {/* Play button — left side, replaces number on hover */}
-                  <div className="w-5 shrink-0 flex items-center justify-center">
-                    <span className={`text-xs text-white/20 group-hover:hidden ${active ? 'hidden' : ''}`}>{i + 1}</span>
-                    <button
-                      onClick={() => handlePlay(track)}
-                      className={`hidden group-hover:flex items-center justify-center text-brand-400 ${active ? '!flex' : ''}`}
+        ) : (() => {
+          const groupsMap = groups.reduce((m, g) => { m[g.id] = g; return m }, {})
+          return (
+            <div className="flex flex-col gap-0.5">
+              {filteredTracks.map((track, i) => {
+                const active = currentTrack?.id === track.id
+                const trackGroup = track.group_id ? groupsMap[track.group_id] : null
+                return (
+                  <div key={track.id} className="relative">
+                    {/* Colored left stripe for group */}
+                    {trackGroup && (
+                      <div
+                        className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full"
+                        style={{ backgroundColor: trackGroup.color }}
+                      />
+                    )}
+                    <div
+                      onDoubleClick={() => handlePlay(track)}
+                      className={`flex items-center gap-3 py-2.5 rounded-lg transition-colors group cursor-pointer
+                        ${trackGroup ? 'pl-4 pr-3' : 'px-3'}
+                        ${active ? 'bg-brand-600/10' : 'hover:bg-white/5'}`}
                     >
-                      {active && isPlaying
-                        ? <span className="text-brand-400 text-xs">▮▮</span>
-                        : <Play size={13} fill="currentColor" />
-                      }
-                    </button>
+                      {/* Play button — left side, replaces number on hover */}
+                      <div className="w-5 shrink-0 flex items-center justify-center">
+                        <span className={`text-xs text-white/20 group-hover:hidden ${active ? 'hidden' : ''}`}>{i + 1}</span>
+                        <button
+                          onClick={() => handlePlay(track)}
+                          className={`hidden group-hover:flex items-center justify-center text-brand-400 ${active ? '!flex' : ''}`}
+                        >
+                          {active && isPlaying
+                            ? <span className="text-brand-400 text-xs">▮▮</span>
+                            : <Play size={13} fill="currentColor" />
+                          }
+                        </button>
+                      </div>
+
+                      <div className="w-9 h-9 rounded overflow-hidden bg-surface-600 shrink-0">
+                        {track.cover_path
+                          ? <img src={/^https?:\/\//.test(track.cover_path) ? track.cover_path : `file://${track.cover_path}`} alt="" className="w-full h-full object-cover" />
+                          : <div className="w-full h-full flex items-center justify-center text-white/20 text-xs">♪</div>
+                        }
+                      </div>
+
+                      <div className="flex-1 overflow-hidden">
+                        <p className={`text-sm font-medium truncate ${active ? 'text-brand-300' : 'text-white'}`}>
+                          {track.title}
+                        </p>
+                        <p className="text-xs text-white/40 truncate flex items-center gap-1.5">
+                          <span className="truncate">{track.artist}</span>
+                          {!track.file_path && <span className="text-amber-400/70 shrink-0">· sem arquivo</span>}
+                          {trackGroup && (
+                            <span className="shrink-0 text-xs px-1.5 py-0 rounded-full border"
+                              style={{ borderColor: trackGroup.color + '50', color: trackGroup.color, backgroundColor: trackGroup.color + '15' }}>
+                              {trackGroup.name}
+                            </span>
+                          )}
+                        </p>
+                      </div>
+
+                      {track.gain != null && track.gain !== 0 && (
+                        <span className="text-xs text-brand-400/60 shrink-0">{track.gain > 0 ? '+' : ''}{track.gain}dB</span>
+                      )}
+
+                      {/* Play next */}
+                      <button
+                        onClick={e => { e.stopPropagation(); playNext(track) }}
+                        className="opacity-0 group-hover:opacity-100 btn-ghost p-1 text-white/30 hover:text-brand-400 transition-all shrink-0"
+                        title="Tocar a seguir"
+                      >
+                        <ListPlus size={13} />
+                      </button>
+
+                      {/* Group assignment — only when groups enabled */}
+                      {groupsEnabled && (
+                        <div className="relative shrink-0" onClick={e => e.stopPropagation()}>
+                          <button
+                            onMouseDown={e => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              setAssigningTrack(prev => prev === track.id ? null : track.id)
+                            }}
+                            className={`btn-ghost p-1 transition-all ${
+                              trackGroup ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                            }`}
+                            style={trackGroup ? { color: trackGroup.color } : {}}
+                            title={trackGroup ? `Grupo: ${trackGroup.name}` : 'Adicionar ao grupo'}
+                          >
+                            <Tag size={12} />
+                          </button>
+                          {assigningTrack === track.id && (
+                            <div
+                              className="absolute right-0 bottom-full mb-1 z-30 bg-surface-700 border border-white/10 rounded-xl shadow-2xl min-w-40 py-1 overflow-hidden"
+                              onMouseDown={e => e.stopPropagation()}
+                            >
+                              {groups.map(g => (
+                                <button
+                                  key={g.id}
+                                  onClick={() => handleSetTrackGroup(track.id, g.id === track.group_id ? null : g.id)}
+                                  className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-white/10 text-left text-xs"
+                                  style={{ color: g.color }}
+                                >
+                                  <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: g.color }} />
+                                  <span className="flex-1">{g.name}</span>
+                                  {track.group_id === g.id && <Check size={10} className="shrink-0" />}
+                                </button>
+                              ))}
+                              {track.group_id && (
+                                <button
+                                  onClick={() => handleSetTrackGroup(track.id, null)}
+                                  className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-white/10 text-left text-xs text-white/40 border-t border-white/5 mt-1 pt-2"
+                                >
+                                  <X size={11} /> Remover do grupo
+                                </button>
+                              )}
+                              {groups.length === 0 && (
+                                <p className="px-3 py-2 text-xs text-white/30">Crie um grupo primeiro</p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Maestro */}
+                      <button
+                        onClick={e => { e.stopPropagation(); setMaestroTrack(track) }}
+                        className="opacity-0 group-hover:opacity-100 btn-ghost p-1 text-white/30 hover:text-white transition-all shrink-0"
+                        title="Painel do Maestro"
+                      >
+                        <Settings2 size={13} />
+                      </button>
+
+                      {/* Delete */}
+                      <button
+                        onClick={e => { e.stopPropagation(); handleRemove(track.id) }}
+                        className="opacity-0 group-hover:opacity-100 btn-ghost p-1 text-white/30 hover:text-red-400 transition-all shrink-0"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
                   </div>
-
-                  <div className="w-9 h-9 rounded overflow-hidden bg-surface-600 shrink-0">
-                    {track.cover_path
-                      ? <img src={/^https?:\/\//.test(track.cover_path) ? track.cover_path : `file://${track.cover_path}`} alt="" className="w-full h-full object-cover" />
-                      : <div className="w-full h-full flex items-center justify-center text-white/20 text-xs">♪</div>
-                    }
-                  </div>
-
-                  <div className="flex-1 overflow-hidden">
-                    <p className={`text-sm font-medium truncate ${active ? 'text-brand-300' : 'text-white'}`}>{track.title}</p>
-                    <p className="text-xs text-white/40 truncate">
-                      {track.artist}
-                      {!track.file_path && <span className="ml-2 text-amber-400/70">· sem arquivo</span>}
-                    </p>
-                  </div>
-
-                  {track.gain != null && track.gain !== 0 && (
-                    <span className="text-xs text-brand-400/60 shrink-0">{track.gain > 0 ? '+' : ''}{track.gain}dB</span>
-                  )}
-
-                  {/* Play next */}
-                  <button
-                    onClick={e => { e.stopPropagation(); playNext(track) }}
-                    className="opacity-0 group-hover:opacity-100 btn-ghost p-1 text-white/30 hover:text-brand-400 transition-all shrink-0"
-                    title="Tocar a seguir"
-                  >
-                    <ListPlus size={13} />
-                  </button>
-
-                  {/* Maestro */}
-                  <button
-                    onClick={e => { e.stopPropagation(); setMaestroTrack(track) }}
-                    className="opacity-0 group-hover:opacity-100 btn-ghost p-1 text-white/30 hover:text-white transition-all shrink-0"
-                    title="Painel do Maestro"
-                  >
-                    <Settings2 size={13} />
-                  </button>
-
-                  {/* Delete on right only */}
-                  <button
-                    onClick={e => { e.stopPropagation(); handleRemove(track.id) }}
-                    className="opacity-0 group-hover:opacity-100 btn-ghost p-1 text-white/30 hover:text-red-400 transition-all shrink-0"
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                </div>
-              )
-            })}
-          </div>
-        )}
+                )
+              })}
+            </div>
+          )
+        })()}
       </div>
 
       {maestroTrack && (

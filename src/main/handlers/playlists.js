@@ -46,7 +46,11 @@ module.exports = function registerPlaylistHandlers(ipcMain) {
       .filter(t => t.playlist_id === playlistId)
       .sort((a, b) => a.position - b.position)
     const tracks = db.tracks.read()
-    return pt.map(row => tracks.find(t => t.id === row.track_id)).filter(Boolean)
+    return pt.map(row => {
+      const track = tracks.find(t => t.id === row.track_id)
+      if (!track) return null
+      return { ...track, group_id: row.group_id || null, group_position: row.group_position ?? 0 }
+    }).filter(Boolean)
   })
 
   ipcMain.handle('playlists:addTrack', (_, { playlistId, trackId }) => {
@@ -88,6 +92,67 @@ module.exports = function registerPlaylistHandlers(ipcMain) {
     })
     if (result.canceled || !result.filePaths.length) return null
     return result.filePaths[0]
+  })
+
+  ipcMain.handle('playlists:toggleGroups', (_, id) => {
+    const db = getDB()
+    const playlists = db.playlists.read()
+    const idx = playlists.findIndex(p => p.id === id)
+    if (idx === -1) return false
+    playlists[idx].groups_enabled = !playlists[idx].groups_enabled
+    playlists[idx].updated_at = Date.now()
+    db.playlists.write(playlists)
+    return playlists[idx]
+  })
+
+  ipcMain.handle('playlists:createGroup', (_, { playlistId, name }) => {
+    const db = getDB()
+    const GROUP_COLORS = ['#7c3aed', '#2563eb', '#059669', '#d97706', '#dc2626', '#db2777']
+    const groups = db.playlistGroups.read()
+    const usedColors = groups.filter(g => g.playlist_id === playlistId).map(g => g.color)
+    const color = GROUP_COLORS.find(c => !usedColors.includes(c)) || GROUP_COLORS[0]
+    const group = { id: uuidv4(), playlist_id: playlistId, name, color, created_at: Date.now() }
+    groups.push(group)
+    db.playlistGroups.write(groups)
+    return group
+  })
+
+  ipcMain.handle('playlists:deleteGroup', (_, groupId) => {
+    const db = getDB()
+    db.playlistGroups.write(db.playlistGroups.read().filter(g => g.id !== groupId))
+    const pt = db.playlistTracks.read()
+    pt.forEach(row => {
+      if (row.group_id === groupId) {
+        row.group_id = null
+        row.group_position = 0
+      }
+    })
+    db.playlistTracks.write(pt)
+    return true
+  })
+
+  ipcMain.handle('playlists:setTrackGroup', (_, { playlistId, trackId, groupId }) => {
+    const db = getDB()
+    const pt = db.playlistTracks.read()
+    const row = pt.find(r => r.playlist_id === playlistId && r.track_id === trackId)
+    if (!row) return false
+    if (!groupId) {
+      row.group_id = null
+      row.group_position = 0
+    } else {
+      const maxPos = pt
+        .filter(r => r.playlist_id === playlistId && r.group_id === groupId)
+        .reduce((m, r) => Math.max(m, r.group_position ?? -1), -1)
+      row.group_id = groupId
+      row.group_position = maxPos + 1
+    }
+    db.playlistTracks.write(pt)
+    return true
+  })
+
+  ipcMain.handle('playlists:getGroups', (_, playlistId) => {
+    const db = getDB()
+    return db.playlistGroups.read().filter(g => g.playlist_id === playlistId)
   })
 
   // Open browser for Google Images search

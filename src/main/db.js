@@ -34,11 +34,12 @@ function initDB() {
   if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true })
 
   _db = {
-    tracks:         new JSONStore(path.join(dataDir, 'tracks.json'),          []),
-    settings:       new JSONStore(path.join(dataDir, 'settings.json'),        {}),
-    downloads:      new JSONStore(path.join(dataDir, 'downloads.json'),       []),
-    playlists:      new JSONStore(path.join(dataDir, 'playlists.json'),       []),
-    playlistTracks: new JSONStore(path.join(dataDir, 'playlist_tracks.json'), []),
+    tracks:          new JSONStore(path.join(dataDir, 'tracks.json'),           []),
+    settings:        new JSONStore(path.join(dataDir, 'settings.json'),         {}),
+    downloads:       new JSONStore(path.join(dataDir, 'downloads.json'),        []),
+    playlists:       new JSONStore(path.join(dataDir, 'playlists.json'),        []),
+    playlistTracks:  new JSONStore(path.join(dataDir, 'playlist_tracks.json'),  []),
+    playlistGroups:  new JSONStore(path.join(dataDir, 'playlist_groups.json'),  []),
   }
 
   console.log('[DB] Initialized at', dataDir)

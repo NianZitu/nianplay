@@ -24,6 +24,7 @@ export function PlayerProvider({ children }) {
   const volumeRef        = useRef(0.8)
   const shuffledOrderRef = useRef([])  // indices into queue[], in shuffle order
   const shuffledPosRef   = useRef(0)   // current position inside shuffledOrder
+  const groupsEnabledRef = useRef(false)
 
   const [queue,        setQueue]        = useState([])
   const [currentIdx,   setCurrentIdx]   = useState(-1)
@@ -35,6 +36,7 @@ export function PlayerProvider({ children }) {
   const [shuffle,      setShuffle]      = useState(false)
   const [shuffledOrder,setShuffledOrder]= useState([])
   const [shuffledPos,  setShuffledPos]  = useState(0)
+  const [groupsEnabled,setGroupsEnabledState] = useState(false)
 
   // Keep refs in sync every render
   queueRef.current         = queue
@@ -43,6 +45,7 @@ export function PlayerProvider({ children }) {
   volumeRef.current        = volume
   shuffledOrderRef.current = shuffledOrder
   shuffledPosRef.current   = shuffledPos
+  groupsEnabledRef.current = groupsEnabled
 
   const currentTrack = queue[currentIdx] ?? null
 
@@ -83,10 +86,36 @@ export function PlayerProvider({ children }) {
     audioRef.current.play().then(() => setIsPlaying(true)).catch(console.error)
   }
 
-  // Advance to next, respecting shuffle order
+  // Advance to next, respecting groups first, then shuffle order
   function _advanceNext() {
     const q = queueRef.current
     if (q.length === 0) return
+
+    // Group-aware advance: if groups enabled and current track belongs to a group,
+    // force the next track in the group (bypasses shuffle)
+    if (groupsEnabledRef.current) {
+      const cur = q[currentIdxRef.current]
+      if (cur?.group_id) {
+        const nextInGroup = q.find(t =>
+          t.group_id === cur.group_id &&
+          (t.group_position ?? 0) === (cur.group_position ?? 0) + 1
+        )
+        if (nextInGroup) {
+          const nextIdx = q.indexOf(nextInGroup)
+          // Keep shuffled position in sync so navigation stays coherent
+          if (shuffleRef.current) {
+            const pos = shuffledOrderRef.current.indexOf(nextIdx)
+            if (pos !== -1) {
+              shuffledPosRef.current = pos
+              setShuffledPos(pos)
+            }
+          }
+          _playByIdx(nextIdx)
+          return
+        }
+      }
+    }
+
     if (shuffleRef.current) {
       const order = shuffledOrderRef.current
       const pos   = shuffledPosRef.current
@@ -219,6 +248,11 @@ export function PlayerProvider({ children }) {
     }
   }, [])
 
+  const setGroupsEnabled = useCallback((val) => {
+    groupsEnabledRef.current = val
+    setGroupsEnabledState(val)
+  }, [])
+
   // Upcoming queue: tracks that will play next (in shuffled or normal order)
   const upcomingTracks = (() => {
     if (queue.length === 0) return []
@@ -244,6 +278,7 @@ export function PlayerProvider({ children }) {
       shuffledOrder, shuffledPos,
       upcomingTracks,
       anchorTrack, setAnchorTrack,
+      groupsEnabled, setGroupsEnabled,
       playTrack, playNext, togglePlay, skipNext, skipPrev, seek, setVolume,
       gainNode: gainRef,
       audioContext: contextRef,
