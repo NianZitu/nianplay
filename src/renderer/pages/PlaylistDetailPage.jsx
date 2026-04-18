@@ -3,7 +3,7 @@ import {
   ArrowLeft, Play, Shuffle, SlidersHorizontal, Plus,
   Trash2, Loader2, CheckCircle2, AlertCircle,
   X, Search, ExternalLink, Pencil, Check, ListPlus, Settings2, Download,
-  DownloadCloud, AlertTriangle, FolderOpen, Tag,
+  DownloadCloud, AlertTriangle, FolderOpen, Tag, Folder, ChevronDown,
 } from 'lucide-react'
 import { usePlayer } from '../store/PlayerContext'
 import MaestroModal from '../components/MaestroModal'
@@ -552,6 +552,99 @@ function formatTotalDuration(secs) {
   return `${s}s`
 }
 
+function shuffleArray(arr) {
+  const a = [...arr]
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[a[i], a[j]] = [a[j], a[i]]
+  }
+  return a
+}
+
+function GroupFolder({ group, groupTracks, expanded, onToggle, onPlayGroup, onPlay, currentTrack, isPlaying }) {
+  const hasActive = groupTracks.some(t => t.id === currentTrack?.id)
+  return (
+    <div className="relative">
+      {/* Colored left stripe */}
+      <div className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full" style={{ backgroundColor: group.color }} />
+
+      {/* Folder header */}
+      <div
+        onClick={onToggle}
+        className={`flex items-center gap-3 pl-4 pr-3 py-2.5 rounded-lg cursor-pointer transition-colors group
+          ${hasActive ? 'bg-brand-600/10' : 'hover:bg-white/5'}`}
+      >
+        <div className="w-5 shrink-0 flex items-center justify-center">
+          {expanded
+            ? <FolderOpen size={15} style={{ color: group.color }} />
+            : <Folder    size={15} style={{ color: group.color }} />
+          }
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium truncate" style={{ color: group.color }}>{group.name}</p>
+          <p className="text-xs text-white/30">{groupTracks.length} faixa{groupTracks.length !== 1 ? 's' : ''}</p>
+        </div>
+        <button
+          onClick={e => { e.stopPropagation(); onPlayGroup() }}
+          className="opacity-0 group-hover:opacity-100 btn-ghost p-1 text-white/50 hover:text-white transition-all shrink-0"
+          title="Reproduzir grupo"
+        >
+          <Play size={12} fill="currentColor" />
+        </button>
+        <ChevronDown
+          size={14}
+          className={`text-white/30 transition-transform duration-200 shrink-0 ${expanded ? 'rotate-180' : ''}`}
+        />
+      </div>
+
+      {/* Expanded tracks */}
+      {expanded && (
+        <div className="ml-4 mt-0.5 mb-1 flex flex-col gap-0.5 border-l-2 pl-3"
+          style={{ borderColor: group.color + '30' }}
+        >
+          {groupTracks.map((track, i) => {
+            const active = currentTrack?.id === track.id
+            return (
+              <div
+                key={track.id}
+                onDoubleClick={() => onPlay(track)}
+                className={`flex items-center gap-2.5 px-2 py-2 rounded-lg cursor-pointer transition-colors group
+                  ${active ? 'bg-brand-600/10' : 'hover:bg-white/5'}`}
+              >
+                <span className="text-xs text-white/20 w-4 text-center shrink-0 group-hover:hidden">
+                  {active && isPlaying ? '' : i + 1}
+                </span>
+                <button
+                  onClick={e => { e.stopPropagation(); onPlay(track) }}
+                  className={`w-4 shrink-0 hidden group-hover:flex items-center justify-center text-brand-400 ${active ? '!flex' : ''}`}
+                >
+                  {active && isPlaying
+                    ? <span className="text-brand-400 text-xs">▮▮</span>
+                    : <Play size={11} fill="currentColor" />
+                  }
+                </button>
+                <div className="w-8 h-8 rounded overflow-hidden bg-surface-600 shrink-0">
+                  {track.cover_path
+                    ? <img src={/^https?:\/\//.test(track.cover_path) ? track.cover_path : `file://${track.cover_path}`} alt="" className="w-full h-full object-cover" />
+                    : <div className="w-full h-full flex items-center justify-center text-white/20 text-xs">♪</div>
+                  }
+                </div>
+                <div className="flex-1 overflow-hidden">
+                  <p className={`text-sm font-medium truncate ${active ? 'text-brand-300' : 'text-white'}`}>{track.title}</p>
+                  <p className="text-xs text-white/40 truncate">{track.artist}</p>
+                </div>
+                {track.gain != null && track.gain !== 0 && (
+                  <span className="text-xs text-brand-400/60 shrink-0">{track.gain > 0 ? '+' : ''}{track.gain}dB</span>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function PlaylistDetailPage({ playlist, onBack }) {
   const [tracks,         setTracks]         = useState([])
   const [search,         setSearch]         = useState('')
@@ -569,6 +662,7 @@ export default function PlaylistDetailPage({ playlist, onBack }) {
   const [showGroupPanel, setShowGroupPanel] = useState(false)
   const [newGroupName,   setNewGroupName]   = useState('')
   const [assigningTrack, setAssigningTrack] = useState(null) // track.id whose dropdown is open
+  const [expandedGroups, setExpandedGroups] = useState(new Set())
   const { playTrack, playNext, setShuffle, currentTrack, isPlaying, setQueue, queue,
           setGroupsEnabled: setPlayerGroupsEnabled } = usePlayer()
 
@@ -605,17 +699,93 @@ export default function PlaylistDetailPage({ playlist, onBack }) {
     setTracks(prev => prev.filter(t => t.id !== trackId))
   }
 
-  function handlePlay(track) { setPlayerGroupsEnabled(groupsEnabled); playTrack(track, tracks) }
+  // Build queue with groups in order; shuffleGroups=true randomises group order and sprinkles ungrouped tracks
+  function buildGroupedQueue(shuffleGroups = false) {
+    const grouped = {}
+    groups.forEach(g => { grouped[g.id] = [] })
+    tracks.forEach(t => { if (t.group_id && grouped[t.group_id]) grouped[t.group_id].push(t) })
+    Object.values(grouped).forEach(arr => arr.sort((a, b) => (a.group_position ?? 0) - (b.group_position ?? 0)))
+
+    let segments = groups
+      .filter(g => grouped[g.id]?.length > 0)
+      .map(g => grouped[g.id])
+    const ungrouped = tracks.filter(t => !t.group_id)
+
+    if (shuffleGroups) {
+      segments = shuffleArray(segments)
+      const pool = shuffleArray(ungrouped)
+      const result = []
+      segments.forEach((seg, i) => {
+        result.push(...seg)
+        // Distribute ungrouped tracks roughly evenly between groups
+        if (i < segments.length - 1) {
+          const slots = segments.length - 1
+          const start = Math.round((i / slots) * pool.length)
+          const end   = Math.round(((i + 1) / slots) * pool.length)
+          result.push(...pool.slice(start, end))
+        }
+      })
+      // Any remaining ungrouped at the end
+      const placed = Math.round(((segments.length - 1) / Math.max(segments.length - 1, 1)) * pool.length)
+      result.push(...pool.slice(placed))
+      return result
+    }
+
+    const result = []
+    segments.forEach(seg => result.push(...seg))
+    result.push(...ungrouped)
+    return result
+  }
+
+  function handlePlay(track) {
+    setPlayerGroupsEnabled(groupsEnabled)
+    if (groupsEnabled && groups.length > 0) {
+      const q = buildGroupedQueue(false)
+      setShuffle(false)
+      playTrack(track, q)
+    } else {
+      playTrack(track, tracks)
+    }
+  }
   function handlePlayAll() {
     if (!tracks.length) return
     setPlayerGroupsEnabled(groupsEnabled)
-    playTrack(tracks[0], tracks)
+    if (groupsEnabled && groups.length > 0) {
+      const q = buildGroupedQueue(false)
+      if (!q.length) return
+      setShuffle(false)
+      playTrack(q[0], q)
+    } else {
+      playTrack(tracks[0], tracks)
+    }
   }
   function handleShuffle() {
     if (!tracks.length) return
     setPlayerGroupsEnabled(groupsEnabled)
-    setShuffle(true)
-    playTrack(tracks[Math.floor(Math.random() * tracks.length)], tracks)
+    if (groupsEnabled && groups.length > 0) {
+      const q = buildGroupedQueue(true)
+      if (!q.length) return
+      setShuffle(false) // queue is already shuffled at group level
+      playTrack(q[0], q)
+    } else {
+      setShuffle(true)
+      playTrack(tracks[Math.floor(Math.random() * tracks.length)], tracks)
+    }
+  }
+  function handlePlayGroup(group) {
+    setPlayerGroupsEnabled(groupsEnabled)
+    const q = buildGroupedQueue(false)
+    setShuffle(false)
+    const first = q.find(t => t.group_id === group.id && (t.group_position ?? 0) === 0)
+    if (first) playTrack(first, q)
+  }
+  function toggleGroupExpand(groupId) {
+    setExpandedGroups(prev => {
+      const next = new Set(prev)
+      if (next.has(groupId)) next.delete(groupId)
+      else next.add(groupId)
+      return next
+    })
   }
 
   async function handleToggleGroups() {
@@ -689,10 +859,6 @@ export default function PlaylistDetailPage({ playlist, onBack }) {
 
   const coverSrc    = coverInput || playlist.cover_url
   const currentIds  = tracks.map(t => t.id)
-
-  const filteredTracks = search.trim()
-    ? tracks.filter(t => (t.title + t.artist).toLowerCase().includes(search.toLowerCase()))
-    : tracks
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
@@ -878,160 +1044,225 @@ export default function PlaylistDetailPage({ playlist, onBack }) {
 
       {/* Track list */}
       <div className="flex-1 overflow-y-auto px-6 pb-6">
-        {filteredTracks.length === 0 ? (
+        {tracks.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-white/20 gap-3">
-            <p className="text-sm">{tracks.length === 0 ? 'Playlist vazia' : 'Nenhum resultado'}</p>
-            {tracks.length === 0 && (
-              <button onClick={() => setShowAdd(true)} className="btn-ghost text-xs px-3 py-1.5 mt-1 text-white/40">
-                Adicionar faixas
-              </button>
-            )}
+            <p className="text-sm">Playlist vazia</p>
+            <button onClick={() => setShowAdd(true)} className="btn-ghost text-xs px-3 py-1.5 mt-1 text-white/40">
+              Adicionar faixas
+            </button>
           </div>
-        ) : (() => {
-          const groupsMap = groups.reduce((m, g) => { m[g.id] = g; return m }, {})
-          return (
-            <div className="flex flex-col gap-0.5">
-              {filteredTracks.map((track, i) => {
-                const active = currentTrack?.id === track.id
-                const trackGroup = track.group_id ? groupsMap[track.group_id] : null
-                return (
-                  <div key={track.id} className="relative">
-                    {/* Colored left stripe for group */}
-                    {trackGroup && (
-                      <div
-                        className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full"
-                        style={{ backgroundColor: trackGroup.color }}
-                      />
+        ) : groupsEnabled && !search.trim() ? (
+          /* ── GROUPS VIEW ── */
+          (() => {
+            const grouped = {}
+            groups.forEach(g => { grouped[g.id] = [] })
+            tracks.forEach(t => { if (t.group_id && grouped[t.group_id]) grouped[t.group_id].push(t) })
+            Object.values(grouped).forEach(arr => arr.sort((a, b) => (a.group_position ?? 0) - (b.group_position ?? 0)))
+            const groupsWithTracks = groups.filter(g => grouped[g.id]?.length > 0)
+            const ungroupedTracks  = tracks.filter(t => !t.group_id)
+            return (
+              <div className="flex flex-col gap-0.5">
+                {/* Group folders */}
+                {groupsWithTracks.map(g => (
+                  <GroupFolder
+                    key={g.id}
+                    group={g}
+                    groupTracks={grouped[g.id]}
+                    expanded={expandedGroups.has(g.id)}
+                    onToggle={() => toggleGroupExpand(g.id)}
+                    onPlayGroup={() => handlePlayGroup(g)}
+                    onPlay={handlePlay}
+                    currentTrack={currentTrack}
+                    isPlaying={isPlaying}
+                  />
+                ))}
+                {groupsWithTracks.length === 0 && (
+                  <p className="text-xs text-white/25 py-3 text-center">
+                    Nenhuma faixa foi atribuída a um grupo ainda
+                  </p>
+                )}
+                {/* Ungrouped tracks */}
+                {ungroupedTracks.length > 0 && (
+                  <>
+                    {groupsWithTracks.length > 0 && (
+                      <p className="text-xs text-white/25 px-3 pt-4 pb-1 uppercase tracking-wider">
+                        Faixas avulsas
+                      </p>
                     )}
-                    <div
-                      onDoubleClick={() => handlePlay(track)}
-                      className={`flex items-center gap-3 py-2.5 rounded-lg transition-colors group cursor-pointer
-                        ${trackGroup ? 'pl-4 pr-3' : 'px-3'}
-                        ${active ? 'bg-brand-600/10' : 'hover:bg-white/5'}`}
-                    >
-                      {/* Play button — left side, replaces number on hover */}
-                      <div className="w-5 shrink-0 flex items-center justify-center">
-                        <span className={`text-xs text-white/20 group-hover:hidden ${active ? 'hidden' : ''}`}>{i + 1}</span>
-                        <button
-                          onClick={() => handlePlay(track)}
-                          className={`hidden group-hover:flex items-center justify-center text-brand-400 ${active ? '!flex' : ''}`}
-                        >
-                          {active && isPlaying
-                            ? <span className="text-brand-400 text-xs">▮▮</span>
-                            : <Play size={13} fill="currentColor" />
-                          }
-                        </button>
-                      </div>
-
-                      <div className="w-9 h-9 rounded overflow-hidden bg-surface-600 shrink-0">
-                        {track.cover_path
-                          ? <img src={/^https?:\/\//.test(track.cover_path) ? track.cover_path : `file://${track.cover_path}`} alt="" className="w-full h-full object-cover" />
-                          : <div className="w-full h-full flex items-center justify-center text-white/20 text-xs">♪</div>
-                        }
-                      </div>
-
-                      <div className="flex-1 overflow-hidden">
-                        <p className={`text-sm font-medium truncate ${active ? 'text-brand-300' : 'text-white'}`}>
-                          {track.title}
-                        </p>
-                        <p className="text-xs text-white/40 truncate flex items-center gap-1.5">
-                          <span className="truncate">{track.artist}</span>
-                          {!track.file_path && <span className="text-amber-400/70 shrink-0">· sem arquivo</span>}
-                          {trackGroup && (
-                            <span className="shrink-0 text-xs px-1.5 py-0 rounded-full border"
-                              style={{ borderColor: trackGroup.color + '50', color: trackGroup.color, backgroundColor: trackGroup.color + '15' }}>
-                              {trackGroup.name}
-                            </span>
-                          )}
-                        </p>
-                      </div>
-
-                      {track.gain != null && track.gain !== 0 && (
-                        <span className="text-xs text-brand-400/60 shrink-0">{track.gain > 0 ? '+' : ''}{track.gain}dB</span>
+                    {ungroupedTracks.map((track, i) => {
+                      const active = currentTrack?.id === track.id
+                      return (
+                        <div key={track.id} className="relative">
+                          <div
+                            onDoubleClick={() => handlePlay(track)}
+                            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors group cursor-pointer
+                              ${active ? 'bg-brand-600/10' : 'hover:bg-white/5'}`}
+                          >
+                            <div className="w-5 shrink-0 flex items-center justify-center">
+                              <span className={`text-xs text-white/20 group-hover:hidden ${active ? 'hidden' : ''}`}>{i + 1}</span>
+                              <button onClick={() => handlePlay(track)}
+                                className={`hidden group-hover:flex items-center justify-center text-brand-400 ${active ? '!flex' : ''}`}>
+                                {active && isPlaying ? <span className="text-brand-400 text-xs">▮▮</span> : <Play size={13} fill="currentColor" />}
+                              </button>
+                            </div>
+                            <div className="w-9 h-9 rounded overflow-hidden bg-surface-600 shrink-0">
+                              {track.cover_path
+                                ? <img src={/^https?:\/\//.test(track.cover_path) ? track.cover_path : `file://${track.cover_path}`} alt="" className="w-full h-full object-cover" />
+                                : <div className="w-full h-full flex items-center justify-center text-white/20 text-xs">♪</div>
+                              }
+                            </div>
+                            <div className="flex-1 overflow-hidden">
+                              <p className={`text-sm font-medium truncate ${active ? 'text-brand-300' : 'text-white'}`}>{track.title}</p>
+                              <p className="text-xs text-white/40 truncate">{track.artist}
+                                {!track.file_path && <span className="ml-2 text-amber-400/70">· sem arquivo</span>}
+                              </p>
+                            </div>
+                            {/* Tag button to assign to a group */}
+                            <div className="relative shrink-0" onClick={e => e.stopPropagation()}>
+                              <button
+                                onMouseDown={e => { e.preventDefault(); e.stopPropagation(); setAssigningTrack(prev => prev === track.id ? null : track.id) }}
+                                className="opacity-0 group-hover:opacity-100 btn-ghost p-1 text-white/30 hover:text-brand-400 transition-all"
+                                title="Adicionar ao grupo"
+                              >
+                                <Tag size={12} />
+                              </button>
+                              {assigningTrack === track.id && (
+                                <div className="absolute right-0 bottom-full mb-1 z-30 bg-surface-700 border border-white/10 rounded-xl shadow-2xl min-w-40 py-1 overflow-hidden"
+                                  onMouseDown={e => e.stopPropagation()}>
+                                  {groups.map(g => (
+                                    <button key={g.id} onClick={() => handleSetTrackGroup(track.id, g.id)}
+                                      className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-white/10 text-left text-xs" style={{ color: g.color }}>
+                                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: g.color }} />
+                                      {g.name}
+                                    </button>
+                                  ))}
+                                  {groups.length === 0 && <p className="px-3 py-2 text-xs text-white/30">Crie um grupo primeiro</p>}
+                                </div>
+                              )}
+                            </div>
+                            <button onClick={e => { e.stopPropagation(); handleRemove(track.id) }}
+                              className="opacity-0 group-hover:opacity-100 btn-ghost p-1 text-white/30 hover:text-red-400 transition-all shrink-0">
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </>
+                )}
+              </div>
+            )
+          })()
+        ) : (
+          /* ── FLAT VIEW (groups OFF or searching) ── */
+          (() => {
+            const displayed = search.trim()
+              ? tracks.filter(t => (t.title + t.artist).toLowerCase().includes(search.toLowerCase()))
+              : tracks
+            if (displayed.length === 0) {
+              return (
+                <div className="flex flex-col items-center justify-center py-16 text-white/20 gap-3">
+                  <p className="text-sm">Nenhum resultado</p>
+                </div>
+              )
+            }
+            const groupsMap = groups.reduce((m, g) => { m[g.id] = g; return m }, {})
+            return (
+              <div className="flex flex-col gap-0.5">
+                {displayed.map((track, i) => {
+                  const active     = currentTrack?.id === track.id
+                  const trackGroup = track.group_id ? groupsMap[track.group_id] : null
+                  return (
+                    <div key={track.id} className="relative">
+                      {trackGroup && (
+                        <div className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full" style={{ backgroundColor: trackGroup.color }} />
                       )}
-
-                      {/* Play next */}
-                      <button
-                        onClick={e => { e.stopPropagation(); playNext(track) }}
-                        className="opacity-0 group-hover:opacity-100 btn-ghost p-1 text-white/30 hover:text-brand-400 transition-all shrink-0"
-                        title="Tocar a seguir"
+                      <div
+                        onDoubleClick={() => handlePlay(track)}
+                        className={`flex items-center gap-3 py-2.5 rounded-lg transition-colors group cursor-pointer
+                          ${trackGroup ? 'pl-4 pr-3' : 'px-3'}
+                          ${active ? 'bg-brand-600/10' : 'hover:bg-white/5'}`}
                       >
-                        <ListPlus size={13} />
-                      </button>
-
-                      {/* Group assignment — only when groups enabled */}
-                      {groupsEnabled && (
+                        <div className="w-5 shrink-0 flex items-center justify-center">
+                          <span className={`text-xs text-white/20 group-hover:hidden ${active ? 'hidden' : ''}`}>{i + 1}</span>
+                          <button onClick={() => handlePlay(track)}
+                            className={`hidden group-hover:flex items-center justify-center text-brand-400 ${active ? '!flex' : ''}`}>
+                            {active && isPlaying ? <span className="text-brand-400 text-xs">▮▮</span> : <Play size={13} fill="currentColor" />}
+                          </button>
+                        </div>
+                        <div className="w-9 h-9 rounded overflow-hidden bg-surface-600 shrink-0">
+                          {track.cover_path
+                            ? <img src={/^https?:\/\//.test(track.cover_path) ? track.cover_path : `file://${track.cover_path}`} alt="" className="w-full h-full object-cover" />
+                            : <div className="w-full h-full flex items-center justify-center text-white/20 text-xs">♪</div>
+                          }
+                        </div>
+                        <div className="flex-1 overflow-hidden">
+                          <p className={`text-sm font-medium truncate ${active ? 'text-brand-300' : 'text-white'}`}>{track.title}</p>
+                          <p className="text-xs text-white/40 truncate flex items-center gap-1.5">
+                            <span className="truncate">{track.artist}</span>
+                            {!track.file_path && <span className="text-amber-400/70 shrink-0">· sem arquivo</span>}
+                            {trackGroup && (
+                              <span className="shrink-0 text-xs px-1.5 rounded-full border"
+                                style={{ borderColor: trackGroup.color + '50', color: trackGroup.color, backgroundColor: trackGroup.color + '15' }}>
+                                {trackGroup.name}
+                              </span>
+                            )}
+                          </p>
+                        </div>
+                        {track.gain != null && track.gain !== 0 && (
+                          <span className="text-xs text-brand-400/60 shrink-0">{track.gain > 0 ? '+' : ''}{track.gain}dB</span>
+                        )}
+                        <button onClick={e => { e.stopPropagation(); playNext(track) }}
+                          className="opacity-0 group-hover:opacity-100 btn-ghost p-1 text-white/30 hover:text-brand-400 transition-all shrink-0" title="Tocar a seguir">
+                          <ListPlus size={13} />
+                        </button>
+                        {/* Group tag button */}
                         <div className="relative shrink-0" onClick={e => e.stopPropagation()}>
                           <button
-                            onMouseDown={e => {
-                              e.preventDefault()
-                              e.stopPropagation()
-                              setAssigningTrack(prev => prev === track.id ? null : track.id)
-                            }}
-                            className={`btn-ghost p-1 transition-all ${
-                              trackGroup ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-                            }`}
+                            onMouseDown={e => { e.preventDefault(); e.stopPropagation(); setAssigningTrack(prev => prev === track.id ? null : track.id) }}
+                            className={`btn-ghost p-1 transition-all ${trackGroup ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
                             style={trackGroup ? { color: trackGroup.color } : {}}
                             title={trackGroup ? `Grupo: ${trackGroup.name}` : 'Adicionar ao grupo'}
                           >
                             <Tag size={12} />
                           </button>
                           {assigningTrack === track.id && (
-                            <div
-                              className="absolute right-0 bottom-full mb-1 z-30 bg-surface-700 border border-white/10 rounded-xl shadow-2xl min-w-40 py-1 overflow-hidden"
-                              onMouseDown={e => e.stopPropagation()}
-                            >
+                            <div className="absolute right-0 bottom-full mb-1 z-30 bg-surface-700 border border-white/10 rounded-xl shadow-2xl min-w-40 py-1 overflow-hidden"
+                              onMouseDown={e => e.stopPropagation()}>
                               {groups.map(g => (
-                                <button
-                                  key={g.id}
-                                  onClick={() => handleSetTrackGroup(track.id, g.id === track.group_id ? null : g.id)}
-                                  className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-white/10 text-left text-xs"
-                                  style={{ color: g.color }}
-                                >
+                                <button key={g.id} onClick={() => handleSetTrackGroup(track.id, g.id === track.group_id ? null : g.id)}
+                                  className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-white/10 text-left text-xs" style={{ color: g.color }}>
                                   <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: g.color }} />
                                   <span className="flex-1">{g.name}</span>
                                   {track.group_id === g.id && <Check size={10} className="shrink-0" />}
                                 </button>
                               ))}
                               {track.group_id && (
-                                <button
-                                  onClick={() => handleSetTrackGroup(track.id, null)}
-                                  className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-white/10 text-left text-xs text-white/40 border-t border-white/5 mt-1 pt-2"
-                                >
+                                <button onClick={() => handleSetTrackGroup(track.id, null)}
+                                  className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-white/10 text-left text-xs text-white/40 border-t border-white/5 mt-1 pt-2">
                                   <X size={11} /> Remover do grupo
                                 </button>
                               )}
-                              {groups.length === 0 && (
-                                <p className="px-3 py-2 text-xs text-white/30">Crie um grupo primeiro</p>
-                              )}
+                              {groups.length === 0 && <p className="px-3 py-2 text-xs text-white/30">Crie um grupo primeiro</p>}
                             </div>
                           )}
                         </div>
-                      )}
-
-                      {/* Maestro */}
-                      <button
-                        onClick={e => { e.stopPropagation(); setMaestroTrack(track) }}
-                        className="opacity-0 group-hover:opacity-100 btn-ghost p-1 text-white/30 hover:text-white transition-all shrink-0"
-                        title="Painel do Maestro"
-                      >
-                        <Settings2 size={13} />
-                      </button>
-
-                      {/* Delete */}
-                      <button
-                        onClick={e => { e.stopPropagation(); handleRemove(track.id) }}
-                        className="opacity-0 group-hover:opacity-100 btn-ghost p-1 text-white/30 hover:text-red-400 transition-all shrink-0"
-                      >
-                        <Trash2 size={13} />
-                      </button>
+                        <button onClick={e => { e.stopPropagation(); setMaestroTrack(track) }}
+                          className="opacity-0 group-hover:opacity-100 btn-ghost p-1 text-white/30 hover:text-white transition-all shrink-0" title="Painel do Maestro">
+                          <Settings2 size={13} />
+                        </button>
+                        <button onClick={e => { e.stopPropagation(); handleRemove(track.id) }}
+                          className="opacity-0 group-hover:opacity-100 btn-ghost p-1 text-white/30 hover:text-red-400 transition-all shrink-0">
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                )
-              })}
-            </div>
-          )
-        })()}
+                  )
+                })}
+              </div>
+            )
+          })()
+        )}
       </div>
 
       {maestroTrack && (
