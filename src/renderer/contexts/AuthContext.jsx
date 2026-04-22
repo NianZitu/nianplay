@@ -81,26 +81,43 @@ export function AuthProvider({ children }) {
         }, { merge: true }))
       }
 
-      // Playlists + their tracks
+      // Playlists + their tracks + groups
       for (const pl of (playlists || [])) {
         const plId  = playlistCloudId(pl)
         const plRef = doc(db, 'users', user.uid, 'playlists', plId)
         ops.push(batch => batch.set(plRef, {
-          name:       pl.name       || '',
-          cover_url:  pl.cover_url  || '',
-          created_at: pl.created_at || '',
-          updatedAt:  serverTimestamp(),
+          name:            pl.name            || '',
+          cover_url:       pl.cover_url       || '',
+          created_at:      pl.created_at      || '',
+          groups_enabled:  pl.groups_enabled  || false,
+          updatedAt:       serverTimestamp(),
         }, { merge: true }))
 
-        // Playlist tracks
+        // Playlist groups
+        const plGroups  = await window.electron.playlists.getGroups(pl.id)
+        const groupById = (plGroups || []).reduce((m, g) => { m[g.id] = g; return m }, {})
+        for (const g of (plGroups || [])) {
+          const gCloudId = `g_${(g.name || '').toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')}`
+          const gRef = doc(db, 'users', user.uid, 'playlists', plId, 'groups', gCloudId)
+          ops.push(batch => batch.set(gRef, {
+            name:       g.name       || '',
+            color:      g.color      || '',
+            created_at: g.created_at || 0,
+          }, { merge: true }))
+        }
+
+        // Playlist tracks (with group assignment)
         const plTracks = await window.electron.playlists.getTracks(pl.id)
         for (const t of (plTracks || [])) {
-          const tId  = trackCloudId(t)
+          const tId   = trackCloudId(t)
           const ptRef = doc(db, 'users', user.uid, 'playlists', plId, 'tracks', tId)
+          const grp   = t.group_id ? groupById[t.group_id] : null
           ops.push(batch => batch.set(ptRef, {
-            title:    t.title  || '',
-            artist:   t.artist || '',
-            position: t.position || 0,
+            title:          t.title  || '',
+            artist:         t.artist || '',
+            position:       t.position     || 0,
+            group_name:     grp?.name      || null,
+            group_position: grp ? (t.group_position ?? 0) : null,
           }, { merge: true }))
         }
       }
@@ -165,24 +182,56 @@ export function AuthProvider({ children }) {
         if (!localPl?.id) continue
 
         // Fetch playlist tracks from cloud and add missing ones
-        const ptSnap    = await getDocs(collection(db, 'users', user.uid, 'playlists', plDoc.id, 'tracks'))
+        const ptSnap        = await getDocs(collection(db, 'users', user.uid, 'playlists', plDoc.id, 'tracks'))
         const localPlTracks = await window.electron.playlists.getTracks(localPl.id)
         const localPtKeys   = new Set((localPlTracks || []).map(t =>
           `${(t.title || '').toLowerCase()}|${(t.artist || '').toLowerCase()}`
         ))
 
+        const allTracks = await window.electron.library.getTracks()
         for (const ptDoc of ptSnap.docs) {
           const pt  = ptDoc.data()
           const key = `${(pt.title || '').toLowerCase()}|${(pt.artist || '').toLowerCase()}`
           if (localPtKeys.has(key)) continue
-
-          // Find the track in local library
-          const allTracks = await window.electron.library.getTracks()
-          const match     = (allTracks || []).find(t =>
+          const match = (allTracks || []).find(t =>
             (t.title || '').toLowerCase()  === (pt.title || '').toLowerCase() &&
             (t.artist || '').toLowerCase() === (pt.artist || '').toLowerCase()
           )
           if (match) await window.electron.playlists.addTrack(localPl.id, match.id)
+        }
+
+        // ── Restore groups ──────────────────────────────────────────────────
+        const groupsSnap  = await getDocs(collection(db, 'users', user.uid, 'playlists', plDoc.id, 'groups'))
+        if (!groupsSnap.empty) {
+          const localGroups    = await window.electron.playlists.getGroups(localPl.id)
+          const groupNameToId  = {}
+
+          // Build / reuse local groups
+          for (const gDoc of groupsSnap.docs) {
+            const g = gDoc.data()
+            const existing = localGroups.find(lg => (lg.name || '').toLowerCase() === (g.name || '').toLowerCase())
+            if (existing) {
+              groupNameToId[g.name] = existing.id
+            } else {
+              const created = await window.electron.playlists.createGroup(localPl.id, g.name)
+              if (created?.id) groupNameToId[g.name] = created.id
+            }
+          }
+
+          // Apply group membership to local playlist tracks
+          const freshPlTracks = await window.electron.playlists.getTracks(localPl.id)
+          for (const ptDoc of ptSnap.docs) {
+            const pt = ptDoc.data()
+            if (!pt.group_name || !(pt.group_name in groupNameToId)) continue
+            const groupId  = groupNameToId[pt.group_name]
+            const localMatch = freshPlTracks.find(t =>
+              (t.title  || '').toLowerCase() === (pt.title  || '').toLowerCase() &&
+              (t.artist || '').toLowerCase() === (pt.artist || '').toLowerCase()
+            )
+            if (localMatch && !localMatch.group_id) {
+              await window.electron.playlists.setTrackGroup(localPl.id, localMatch.id, groupId)
+            }
+          }
         }
       }
 

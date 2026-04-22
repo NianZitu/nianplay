@@ -17,18 +17,23 @@
   }
 
   ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 12px;
+    height: 12px;
   }
   ::-webkit-scrollbar-track {
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
     background: #3d3d62;
-    border-radius: 3px;
+    border-radius: 4px;
+    /* transparent border creates gap between thumb and window edge */
+    border: 2px solid transparent;
+    border-right-width: 5px;
+    background-clip: padding-box;
   }
   ::-webkit-scrollbar-thumb:hover {
     background: #6366f1;
+    background-clip: padding-box;
   }
 }
 

@@ -163,7 +163,7 @@ module.exports = function registerPlaylistHandlers(ipcMain) {
     return true
   })
 
-  // Export a playlist (with all its tracks) to a JSON file
+  // Export a playlist (with all its tracks and groups) to a JSON file
   ipcMain.handle('playlists:export', async (_, playlistId) => {
     const { dialog, BrowserWindow } = require('electron')
     const db = getDB()
@@ -173,29 +173,42 @@ module.exports = function registerPlaylistHandlers(ipcMain) {
     const pt = db.playlistTracks.read()
       .filter(r => r.playlist_id === playlistId)
       .sort((a, b) => a.position - b.position)
-    const allTracks = db.tracks.read()
+    const allTracks  = db.tracks.read()
+    const allGroups  = db.playlistGroups.read().filter(g => g.playlist_id === playlistId)
+    // Build lookup: group id → group name
+    const groupById  = allGroups.reduce((m, g) => { m[g.id] = g; return m }, {})
+
     const tracks = pt.map(row => {
       const t = allTracks.find(t => t.id === row.track_id)
       if (!t) return null
       return {
-        title:    t.title,
-        artist:   t.artist,
-        album:    t.album,
-        duration: t.duration,
-        genre:    t.genre,
-        year:     t.year,
-        yt_url:   t.yt_url,
-        lyrics:   t.lyrics,
-        gain:     t.gain,
+        title:          t.title,
+        artist:         t.artist,
+        album:          t.album,
+        duration:       t.duration,
+        genre:          t.genre,
+        year:           t.year,
+        yt_url:         t.yt_url,
+        lyrics:         t.lyrics,
+        gain:           t.gain,
+        group_name:     row.group_id ? (groupById[row.group_id]?.name || null) : null,
+        group_position: row.group_id ? (row.group_position ?? 0) : null,
       }
     }).filter(Boolean)
 
+    const groups = allGroups.map(g => ({
+      name:       g.name,
+      color:      g.color,
+      created_at: g.created_at,
+    }))
+
     const exportData = {
-      version:    1,
+      version:    2,
       type:       'nianplay-playlist',
       name:       playlist.name,
       cover_url:  playlist.cover_url || '',
       exportedAt: Date.now(),
+      groups,
       tracks,
     }
 
@@ -318,6 +331,41 @@ module.exports = function registerPlaylistHandlers(ipcMain) {
 
     db.tracks.write(allTracks)
     db.playlistTracks.write(pt)
+
+    // ── Restore groups (version 2+) ──────────────────────────────────────────
+    if (Array.isArray(data.groups) && data.groups.length > 0) {
+      const GROUP_COLORS = ['#7c3aed', '#2563eb', '#059669', '#d97706', '#dc2626', '#db2777']
+      const groups = db.playlistGroups.read()
+
+      // Map group name → new local group id
+      const groupNameToId = {}
+      data.groups.forEach((g, idx) => {
+        const color = g.color || GROUP_COLORS[idx % GROUP_COLORS.length]
+        const newGroup = { id: uuidv4(), playlist_id: playlist.id, name: g.name, color, created_at: g.created_at || Date.now() }
+        groups.push(newGroup)
+        groupNameToId[g.name] = newGroup.id
+      })
+      db.playlistGroups.write(groups)
+
+      // Assign group memberships to playlist tracks
+      const ptFinal = db.playlistTracks.read()
+      const norm = s => (s || '').toLowerCase().trim()
+      data.tracks.forEach(imp => {
+        if (!imp.group_name || !(imp.group_name in groupNameToId)) return
+        const groupId = groupNameToId[imp.group_name]
+        // Find the matching playlist track row
+        const trackMatch = allTracks.find(t =>
+          norm(t.title) === norm(imp.title) && norm(t.artist) === norm(imp.artist)
+        ) || allTracks.find(t => norm(t.title) === norm(imp.title))
+        if (!trackMatch) return
+        const row = ptFinal.find(r => r.playlist_id === playlist.id && r.track_id === trackMatch.id)
+        if (row) {
+          row.group_id       = groupId
+          row.group_position = imp.group_position ?? 0
+        }
+      })
+      db.playlistTracks.write(ptFinal)
+    }
 
     return {
       ok:          true,
