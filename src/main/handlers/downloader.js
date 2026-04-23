@@ -275,7 +275,7 @@ async function runDownload(id, opts, sendProgress) {
       '--convert-thumbnails', 'jpg',
       '--ffmpeg-location', ffmpegPath,
       '-o', outputTemplate,
-      '--restrict-filenames',       // replace special chars with underscores
+      '--windows-filenames',        // strip only chars invalid on Windows, keeps spaces
       '--newline',
       '--progress',
       '--no-warnings',
