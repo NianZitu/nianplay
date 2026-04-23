@@ -136,7 +136,9 @@ export function AuthProvider({ children }) {
     setSyncStatus(s => ({ ...s, downloading: true, error: null }))
     try {
       const localTracks = await window.electron.library.getTracks()
-      const localKeys   = new Set((localTracks || []).map(t =>
+      // Prefer yt_url match (most reliable); fall back to title+artist
+      const localUrlSet  = new Set((localTracks || []).filter(t => t.yt_url).map(t => t.yt_url))
+      const localMetaSet = new Set((localTracks || []).map(t =>
         `${(t.title || '').toLowerCase()}|${(t.artist || '').toLowerCase()}`
       ))
 
@@ -145,8 +147,10 @@ export function AuthProvider({ children }) {
       const newTracks  = []
       tracksSnap.forEach(d => {
         const t   = d.data()
+        if (t.yt_url && localUrlSet.has(t.yt_url)) return   // already exists by URL
         const key = `${(t.title || '').toLowerCase()}|${(t.artist || '').toLowerCase()}`
-        if (!localKeys.has(key)) newTracks.push(t)
+        if (localMetaSet.has(key)) return                    // already exists by meta
+        newTracks.push(t)
       })
 
       // Import missing tracks into local library as virtual entries (no file_path)

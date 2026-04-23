@@ -117,22 +117,48 @@ module.exports = function registerLibraryHandlers(ipcMain) {
     const db = getDB()
     const tracks = db.tracks.read()
     const norm = s => (s || '').toLowerCase().trim()
-    const exists = tracks.some(t =>
+
+    // 1. Match by yt_url first (most reliable identifier)
+    if (track.yt_url) {
+      const byUrl = tracks.find(t => t.yt_url && t.yt_url === track.yt_url)
+      if (byUrl) {
+        // Merge any missing metadata onto existing track
+        let changed = false
+        if (!byUrl.lyrics  && track.lyrics)   { byUrl.lyrics  = track.lyrics;   changed = true }
+        if (!byUrl.gain    && track.gain)      { byUrl.gain    = track.gain;     changed = true }
+        if (!byUrl.album   && track.album)     { byUrl.album   = track.album;    changed = true }
+        if (changed) { byUrl.updated_at = Date.now(); db.tracks.write(tracks) }
+        return { skipped: true, id: byUrl.id }
+      }
+    }
+
+    // 2. Fall back to title + artist match
+    const byMeta = tracks.find(t =>
       norm(t.title) === norm(track.title) && norm(t.artist) === norm(track.artist)
     )
-    if (exists) return { skipped: true }
+    if (byMeta) {
+      // Merge yt_url if local track is missing it
+      let changed = false
+      if (!byMeta.yt_url && track.yt_url) { byMeta.yt_url = track.yt_url; changed = true }
+      if (!byMeta.lyrics && track.lyrics)  { byMeta.lyrics = track.lyrics; changed = true }
+      if (changed) { byMeta.updated_at = Date.now(); db.tracks.write(tracks) }
+      return { skipped: true, id: byMeta.id }
+    }
+
     const newTrack = {
-      id:        Date.now() + Math.floor(Math.random() * 1000),
-      title:     track.title    || '',
-      artist:    track.artist   || '',
-      album:     track.album    || '',
-      duration:  track.duration || 0,
+      id:        uuidv4(),
+      title:     track.title     || '',
+      artist:    track.artist    || '',
+      album:     track.album     || '',
+      duration:  track.duration  || 0,
       file_path: '',
-      yt_url:    track.yt_url   || '',
+      yt_url:    track.yt_url    || '',
       cover_url: track.cover_url || '',
-      lyrics:    track.lyrics   || '',
-      gain:      track.gain     || 0,
+      lyrics:    track.lyrics    || '',
+      gain:      track.gain      || 0,
       added_at:  Date.now(),
+      created_at: Date.now(),
+      updated_at: Date.now(),
     }
     db.tracks.write([...tracks, newTrack])
     return { id: newTrack.id }

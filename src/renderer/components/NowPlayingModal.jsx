@@ -63,7 +63,6 @@ export default function NowPlayingModal({ onClose }) {
   const [freshTrack,    setFreshTrack]    = useState(null)
   const [coverError,    setCoverError]    = useState(false)
   const [showVinyl,     setShowVinyl]     = useState(false)
-  const webviewRef = useRef(null)
 
   useEffect(() => {
     if (!currentTrack?.id || !window.electron) return
@@ -74,39 +73,6 @@ export default function NowPlayingModal({ onClose }) {
 
   // Reset vinyl/cover error when track changes
   useEffect(() => { setCoverError(false) }, [currentTrack?.id])
-
-  // Inject CSS to hide YouTube UI and mute video once the webview loads
-  useEffect(() => {
-    const wv = webviewRef.current
-    if (!wv) return
-    const onLoad = () => {
-      wv.executeJavaScript(`
-        const s = document.createElement('style')
-        s.textContent = \`
-          ytd-masthead, #masthead-container, #header,
-          #secondary, #related, ytd-watch-next-secondary-results-renderer,
-          #comments, ytd-comments, ytd-watch-metadata,
-          #above-the-fold .metadata-action-bar,
-          #description-inner, tp-yt-paper-dialog,
-          .ytp-chrome-top-buttons, .ytp-show-cards-title,
-          .ytp-ce-element, .ytp-endscreen-content,
-          #masthead-ad, .masthead-ad-control
-          { display: none !important; }
-          body, html { overflow: hidden !important; background: #000 !important; margin: 0; }
-          #movie_player, .html5-video-container { width: 100vw !important; }
-          video { max-height: 100vh !important; }
-        \`
-        document.head.appendChild(s)
-        const mute = () => {
-          const v = document.querySelector('video')
-          if (v) { v.muted = true; v.volume = 0 }
-        }
-        mute(); setTimeout(mute, 1500); setTimeout(mute, 3000)
-      `).catch(() => {})
-    }
-    wv.addEventListener('did-finish-load', onLoad)
-    return () => wv.removeEventListener('did-finish-load', onLoad)
-  }, [webviewRef.current])
 
   if (!currentTrack) return null
 
@@ -141,8 +107,6 @@ export default function NowPlayingModal({ onClose }) {
     setFreshTrack(prev => ({ ...prev, cover_path: raw }))
     setCoverInput('')
   }
-
-  const ytId = track.yt_url?.match(/(?:v=|youtu\.be\/)([^&?/]+)/)?.[1]
 
   return (
     <>
@@ -275,19 +239,8 @@ export default function NowPlayingModal({ onClose }) {
             </div>
           </div>
 
-          {/* Right: video + lyrics */}
+          {/* Right: lyrics */}
           <div className="flex-1 flex flex-col gap-4 overflow-hidden">
-            {ytId && (
-              <div className="rounded-xl overflow-hidden bg-black shrink-0" style={{ aspectRatio: '16/9', maxHeight: '45%' }}>
-                <webview
-                  ref={webviewRef}
-                  src={`https://www.youtube.com/watch?v=${ytId}&autoplay=1`}
-                  useragent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-                  style={{ width: '100%', height: '100%' }}
-                />
-              </div>
-            )}
-
             {track.lyrics ? (
               <div className="flex-1 overflow-y-auto">
                 <p className="text-xs text-white/30 uppercase tracking-wider font-medium mb-3">Letra</p>
@@ -295,7 +248,7 @@ export default function NowPlayingModal({ onClose }) {
               </div>
             ) : (
               <div className="flex-1 flex items-center justify-center text-white/20 text-sm">
-                {ytId ? null : 'Sem letra disponível. Adicione via Painel do Maestro.'}
+                Sem letra disponível. Adicione via Painel do Maestro.
               </div>
             )}
           </div>
