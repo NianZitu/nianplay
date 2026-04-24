@@ -662,6 +662,7 @@ export default function PlaylistDetailPage({ playlist, onBack }) {
   const [showGroupPanel, setShowGroupPanel] = useState(false)
   const [newGroupName,   setNewGroupName]   = useState('')
   const [assigningTrack, setAssigningTrack] = useState(null) // track.id whose dropdown is open
+  const [dropdownPos,    setDropdownPos]    = useState(null) // { top, right } fixed coords
   const [expandedGroups, setExpandedGroups] = useState(new Set())
   const { playTrack, playNext, setShuffle, currentTrack, isPlaying, setQueue, queue,
           setGroupsEnabled: setPlayerGroupsEnabled } = usePlayer()
@@ -676,7 +677,7 @@ export default function PlaylistDetailPage({ playlist, onBack }) {
   // Close group assignment dropdown on outside click
   useEffect(() => {
     if (!assigningTrack) return
-    function onDown() { setAssigningTrack(null) }
+    function onDown() { setAssigningTrack(null); setDropdownPos(null) }
     document.addEventListener('mousedown', onDown)
     return () => document.removeEventListener('mousedown', onDown)
   }, [assigningTrack])
@@ -828,6 +829,31 @@ export default function PlaylistDetailPage({ playlist, onBack }) {
       setQueue(queue.map(qt => qt.id === trackId ? upd : qt))
     }
     setAssigningTrack(null)
+    setDropdownPos(null)
+  }
+
+  // Open group assignment dropdown using fixed positioning so it's never clipped
+  function openGroupDropdown(e, trackId) {
+    e.preventDefault()
+    e.stopPropagation()
+    if (assigningTrack === trackId) {
+      setAssigningTrack(null)
+      setDropdownPos(null)
+      return
+    }
+    const btn  = e.currentTarget
+    const rect = btn.getBoundingClientRect()
+    // Estimate dropdown height: each group row ~34px + optional remove row + padding
+    const hasRemove     = !!(tracks.find(t => t.id === trackId)?.group_id)
+    const estimatedH    = groups.length * 34 + (hasRemove ? 44 : 0) + 16
+    const spaceBelow    = window.innerHeight - rect.bottom - 8
+    const top = spaceBelow >= estimatedH
+      ? rect.bottom + 4                          // open below button
+      : Math.max(8, rect.top - estimatedH - 4)  // flip above if not enough space
+    const right = window.innerWidth - rect.right
+
+    setAssigningTrack(trackId)
+    setDropdownPos({ top, right })
   }
 
   async function handleExport() {
@@ -1118,27 +1144,14 @@ export default function PlaylistDetailPage({ playlist, onBack }) {
                               </p>
                             </div>
                             {/* Tag button to assign to a group */}
-                            <div className="relative shrink-0" onClick={e => e.stopPropagation()}>
+                            <div className="shrink-0" onClick={e => e.stopPropagation()}>
                               <button
-                                onMouseDown={e => { e.preventDefault(); e.stopPropagation(); setAssigningTrack(prev => prev === track.id ? null : track.id) }}
+                                onMouseDown={e => openGroupDropdown(e, track.id)}
                                 className="opacity-0 group-hover:opacity-100 btn-ghost p-1 text-white/30 hover:text-brand-400 transition-all"
                                 title="Adicionar ao grupo"
                               >
                                 <Tag size={12} />
                               </button>
-                              {assigningTrack === track.id && (
-                                <div className="absolute right-0 bottom-full mb-1 z-30 bg-surface-700 border border-white/10 rounded-xl shadow-2xl min-w-40 py-1 overflow-hidden"
-                                  onMouseDown={e => e.stopPropagation()}>
-                                  {groups.map(g => (
-                                    <button key={g.id} onClick={() => handleSetTrackGroup(track.id, g.id)}
-                                      className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-white/10 text-left text-xs" style={{ color: g.color }}>
-                                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: g.color }} />
-                                      {g.name}
-                                    </button>
-                                  ))}
-                                  {groups.length === 0 && <p className="px-3 py-2 text-xs text-white/30">Crie um grupo primeiro</p>}
-                                </div>
-                              )}
                             </div>
                             <button onClick={e => { e.stopPropagation(); handleRemove(track.id) }}
                               className="opacity-0 group-hover:opacity-100 btn-ghost p-1 text-white/30 hover:text-red-400 transition-all shrink-0">
@@ -1217,35 +1230,15 @@ export default function PlaylistDetailPage({ playlist, onBack }) {
                           <ListPlus size={13} />
                         </button>
                         {/* Group tag button */}
-                        <div className="relative shrink-0" onClick={e => e.stopPropagation()}>
+                        <div className="shrink-0" onClick={e => e.stopPropagation()}>
                           <button
-                            onMouseDown={e => { e.preventDefault(); e.stopPropagation(); setAssigningTrack(prev => prev === track.id ? null : track.id) }}
+                            onMouseDown={e => openGroupDropdown(e, track.id)}
                             className={`btn-ghost p-1 transition-all ${trackGroup ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
                             style={trackGroup ? { color: trackGroup.color } : {}}
                             title={trackGroup ? `Grupo: ${trackGroup.name}` : 'Adicionar ao grupo'}
                           >
                             <Tag size={12} />
                           </button>
-                          {assigningTrack === track.id && (
-                            <div className="absolute right-0 bottom-full mb-1 z-30 bg-surface-700 border border-white/10 rounded-xl shadow-2xl min-w-40 py-1 overflow-hidden"
-                              onMouseDown={e => e.stopPropagation()}>
-                              {groups.map(g => (
-                                <button key={g.id} onClick={() => handleSetTrackGroup(track.id, g.id === track.group_id ? null : g.id)}
-                                  className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-white/10 text-left text-xs" style={{ color: g.color }}>
-                                  <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: g.color }} />
-                                  <span className="flex-1">{g.name}</span>
-                                  {track.group_id === g.id && <Check size={10} className="shrink-0" />}
-                                </button>
-                              ))}
-                              {track.group_id && (
-                                <button onClick={() => handleSetTrackGroup(track.id, null)}
-                                  className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-white/10 text-left text-xs text-white/40 border-t border-white/5 mt-1 pt-2">
-                                  <X size={11} /> Remover do grupo
-                                </button>
-                              )}
-                              {groups.length === 0 && <p className="px-3 py-2 text-xs text-white/30">Crie um grupo primeiro</p>}
-                            </div>
-                          )}
                         </div>
                         <button onClick={e => { e.stopPropagation(); setMaestroTrack(track) }}
                           className="opacity-0 group-hover:opacity-100 btn-ghost p-1 text-white/30 hover:text-white transition-all shrink-0" title="Painel do Maestro">
@@ -1292,6 +1285,43 @@ export default function PlaylistDetailPage({ playlist, onBack }) {
           onAdded={loadTracks}
         />
       )}
+
+      {/* Group assignment dropdown — fixed-position so it's never clipped by overflow */}
+      {assigningTrack && dropdownPos && (() => {
+        const t = tracks.find(tr => tr.id === assigningTrack)
+        if (!t) return null
+        return (
+          <div
+            className="fixed z-[300] bg-surface-700 border border-white/10 rounded-xl shadow-2xl py-1 overflow-hidden"
+            style={{ top: dropdownPos.top, right: dropdownPos.right, minWidth: '160px' }}
+            onMouseDown={e => e.stopPropagation()}
+          >
+            {groups.map(g => (
+              <button
+                key={g.id}
+                onClick={() => handleSetTrackGroup(t.id, t.group_id === g.id ? null : g.id)}
+                className="w-full flex items-center gap-2 px-3 py-2 hover:bg-white/10 text-left text-xs"
+                style={{ color: g.color }}
+              >
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: g.color }} />
+                <span className="flex-1">{g.name}</span>
+                {t.group_id === g.id && <Check size={10} className="shrink-0" />}
+              </button>
+            ))}
+            {t.group_id && (
+              <button
+                onClick={() => handleSetTrackGroup(t.id, null)}
+                className="w-full flex items-center gap-2 px-3 py-2 hover:bg-white/10 text-left text-xs text-white/40 border-t border-white/5 mt-1 pt-1"
+              >
+                <X size={11} /> Remover do grupo
+              </button>
+            )}
+            {groups.length === 0 && (
+              <p className="px-3 py-2 text-xs text-white/30">Crie um grupo primeiro</p>
+            )}
+          </div>
+        )
+      })()}
     </div>
   )
 }

@@ -1,6 +1,6 @@
 {
   "name": "nianplay",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "Local music player with professional audio tools",
   "main": "src/main/main.js",
   "scripts": {
