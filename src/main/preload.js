@@ -52,6 +52,8 @@ contextBridge.exposeInMainWorld('electron', {
     searchImageBrowser: (query)                                 => ipcRenderer.invoke('playlists:searchImageBrowser', query),
     export:             (id)                                    => ipcRenderer.invoke('playlists:export', id),
     import:             ()                                      => ipcRenderer.invoke('playlists:import'),
+    duplicate:          (id)                                    => ipcRenderer.invoke('playlists:duplicate', id),
+    merge:              (opts)                                  => ipcRenderer.invoke('playlists:merge', opts),
     toggleGroups:       (id)                                    => ipcRenderer.invoke('playlists:toggleGroups', id),
     createGroup:        (playlistId, name)                      => ipcRenderer.invoke('playlists:createGroup', { playlistId, name }),
     deleteGroup:        (groupId)                               => ipcRenderer.invoke('playlists:deleteGroup', groupId),

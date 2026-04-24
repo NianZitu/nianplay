@@ -168,6 +168,98 @@ module.exports = function registerPlaylistHandlers(ipcMain) {
     return db.playlistGroups.read().filter(g => g.playlist_id === playlistId)
   })
 
+  // Duplicate a playlist — copies tracks and groups with new IDs
+  ipcMain.handle('playlists:duplicate', (_, playlistId) => {
+    const db = getDB()
+    const playlist = db.playlists.read().find(p => p.id === playlistId)
+    if (!playlist) return { error: 'Playlist não encontrada' }
+
+    const newId = uuidv4()
+    const newPlaylist = {
+      id:             newId,
+      name:           `${playlist.name} (Cópia)`,
+      cover_url:      playlist.cover_url || '',
+      groups_enabled: playlist.groups_enabled || false,
+      created_at:     Date.now(),
+      updated_at:     Date.now(),
+    }
+
+    // Map old group ids → new group ids
+    const allGroups = db.playlistGroups.read()
+    const oldGroups = allGroups.filter(g => g.playlist_id === playlistId)
+    const groupIdMap = {}
+    const newGroups  = oldGroups.map(g => {
+      const newGId = uuidv4()
+      groupIdMap[g.id] = newGId
+      return { ...g, id: newGId, playlist_id: newId }
+    })
+
+    // Copy playlist tracks
+    const allPt = db.playlistTracks.read()
+    const newPt = allPt
+      .filter(r => r.playlist_id === playlistId)
+      .map(r => ({
+        ...r,
+        id:          uuidv4(),
+        playlist_id: newId,
+        group_id:    r.group_id ? (groupIdMap[r.group_id] ?? null) : null,
+      }))
+
+    // Save everything
+    const playlists = db.playlists.read()
+    playlists.unshift(newPlaylist)
+    db.playlists.write(playlists)
+
+    allGroups.push(...newGroups)
+    db.playlistGroups.write(allGroups)
+
+    allPt.push(...newPt)
+    db.playlistTracks.write(allPt)
+
+    return { ok: true, playlist: { ...newPlaylist, trackCount: newPt.length } }
+  })
+
+  // Merge multiple playlists into a single new one (deduplicates by track_id)
+  ipcMain.handle('playlists:merge', (_, { playlistIds, name, cover_url }) => {
+    const db = getDB()
+    const allPt = db.playlistTracks.read()
+
+    const seen = new Set()
+    const mergedRows = []
+    let position = 0
+
+    for (const plId of (playlistIds || [])) {
+      const rows = allPt
+        .filter(r => r.playlist_id === plId)
+        .sort((a, b) => a.position - b.position)
+      for (const row of rows) {
+        if (!seen.has(row.track_id)) {
+          seen.add(row.track_id)
+          mergedRows.push({ id: uuidv4(), playlist_id: '', track_id: row.track_id, position: position++, group_id: null, group_position: 0 })
+        }
+      }
+    }
+
+    const newPlaylist = {
+      id:             uuidv4(),
+      name:           name || 'Playlist Unida',
+      cover_url:      cover_url || '',
+      groups_enabled: false,
+      created_at:     Date.now(),
+      updated_at:     Date.now(),
+    }
+    mergedRows.forEach(r => { r.playlist_id = newPlaylist.id })
+
+    const playlists = db.playlists.read()
+    playlists.unshift(newPlaylist)
+    db.playlists.write(playlists)
+
+    allPt.push(...mergedRows)
+    db.playlistTracks.write(allPt)
+
+    return { ok: true, playlist: { ...newPlaylist, trackCount: mergedRows.length } }
+  })
+
   // Open browser for Google Images search
   ipcMain.handle('playlists:searchImageBrowser', (_, query) => {
     const { shell } = require('electron')

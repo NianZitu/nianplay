@@ -5,6 +5,9 @@ import {
   createUserWithEmailAndPassword,
   signOut,
   updateProfile,
+  signInWithPopup,
+  GoogleAuthProvider,
+  sendPasswordResetEmail,
 } from 'firebase/auth'
 import {
   doc, collection, getDocs, setDoc, deleteDoc,
@@ -73,6 +76,15 @@ export function AuthProvider({ children }) {
 
   async function logout() {
     await signOut(auth)
+  }
+
+  async function loginWithGoogle() {
+    const provider = new GoogleAuthProvider()
+    await signInWithPopup(auth, provider)
+  }
+
+  async function sendPasswordReset(email) {
+    await sendPasswordResetEmail(auth, email)
   }
 
   // ── Upload local → cloud ──────────────────────────────────────────────────
@@ -272,7 +284,7 @@ export function AuthProvider({ children }) {
     }
   }, [user])
 
-  const value = { user, syncStatus, login, register, logout, syncToCloud, syncFromCloud }
+  const value = { user, syncStatus, login, register, logout, loginWithGoogle, sendPasswordReset, syncToCloud, syncFromCloud }
 
   return (
     <AuthContext.Provider value={value}>

@@ -31,6 +31,23 @@ function createWindow() {
   }
 
   mainWindow.on('closed', () => { mainWindow = null })
+
+  // Allow Firebase OAuth popup (Google sign-in) to open as a real window
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (
+      url.startsWith('https://accounts.google.com') ||
+      url.includes('firebaseapp.com/__/auth/')
+    ) {
+      return {
+        action: 'allow',
+        overrideBrowserWindowOptions: {
+          width: 500, height: 640,
+          webPreferences: { nodeIntegration: false, contextIsolation: false },
+        },
+      }
+    }
+    return { action: 'deny' }
+  })
 }
 
 async function ensureYtDlp() {
