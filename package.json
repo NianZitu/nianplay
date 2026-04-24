@@ -1,6 +1,6 @@
 {
   "name": "nianplay",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "Local music player with professional audio tools",
   "main": "src/main/main.js",
   "scripts": {
@@ -38,6 +38,7 @@
     "@radix-ui/react-tabs": "^1.0.4",
     "@radix-ui/react-tooltip": "^1.0.7",
     "electron-store": "^8.2.0",
+    "electron-updater": "^6.8.3",
     "ffmpeg-static": "^5.2.0",
     "ffprobe-static": "^3.1.0",
     "firebase": "^12.12.0",
@@ -54,6 +55,11 @@
     "appId": "com.nianplay.app",
     "productName": "NianPlay",
     "asar": true,
+    "publish": {
+      "provider": "github",
+      "owner": "NianZitu",
+      "repo": "nianplay"
+    },
     "asarUnpack": [
       "node_modules/ffmpeg-static/**",
       "node_modules/ffprobe-static/**"

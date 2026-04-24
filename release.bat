@@ -1,7 +1,9 @@
 @echo off
 setlocal
 
-set GH_TOKEN=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
+:: Token lido de .release-token (arquivo ignorado pelo git)
+set /p GH_TOKEN=<.release-token
+
 set GH_OWNER=NianZitu
 set GH_REPO=nianplay
 

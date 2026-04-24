@@ -39,23 +39,24 @@ contextBridge.exposeInMainWorld('electron', {
 
   // Playlists
   playlists: {
-    getAll:             ()                            => ipcRenderer.invoke('playlists:getAll'),
-    create:             (opts)                        => ipcRenderer.invoke('playlists:create', opts),
-    update:             (opts)                        => ipcRenderer.invoke('playlists:update', opts),
-    delete:             (id)                          => ipcRenderer.invoke('playlists:delete', id),
-    getTracks:          (playlistId)                  => ipcRenderer.invoke('playlists:getTracks', playlistId),
-    addTrack:           (playlistId, trackId)         => ipcRenderer.invoke('playlists:addTrack', { playlistId, trackId }),
-    removeTrack:        (playlistId, trackId)         => ipcRenderer.invoke('playlists:removeTrack', { playlistId, trackId }),
-    reorder:            (playlistId, orderedTrackIds) => ipcRenderer.invoke('playlists:reorder', { playlistId, orderedTrackIds }),
-    chooseCover:        ()                            => ipcRenderer.invoke('playlists:chooseCover'),
-    searchImageBrowser: (query)                       => ipcRenderer.invoke('playlists:searchImageBrowser', query),
-    export:             (id)                          => ipcRenderer.invoke('playlists:export', id),
-    import:             ()                            => ipcRenderer.invoke('playlists:import'),
-    toggleGroups:       (id)                          => ipcRenderer.invoke('playlists:toggleGroups', id),
-    createGroup:        (playlistId, name)            => ipcRenderer.invoke('playlists:createGroup', { playlistId, name }),
-    deleteGroup:        (groupId)                     => ipcRenderer.invoke('playlists:deleteGroup', groupId),
-    setTrackGroup:      (playlistId, trackId, groupId) => ipcRenderer.invoke('playlists:setTrackGroup', { playlistId, trackId, groupId }),
-    getGroups:          (playlistId)                  => ipcRenderer.invoke('playlists:getGroups', playlistId),
+    getAll:             ()                                      => ipcRenderer.invoke('playlists:getAll'),
+    create:             (opts)                                  => ipcRenderer.invoke('playlists:create', opts),
+    update:             (opts)                                  => ipcRenderer.invoke('playlists:update', opts),
+    delete:             (id)                                    => ipcRenderer.invoke('playlists:delete', id),
+    getTracks:          (playlistId)                            => ipcRenderer.invoke('playlists:getTracks', playlistId),
+    addTrack:           (playlistId, trackId)                   => ipcRenderer.invoke('playlists:addTrack', { playlistId, trackId }),
+    removeTrack:        (playlistId, trackId)                   => ipcRenderer.invoke('playlists:removeTrack', { playlistId, trackId }),
+    reorder:            (playlistId, orderedTrackIds)           => ipcRenderer.invoke('playlists:reorder', { playlistId, orderedTrackIds }),
+    reorderGroup:       (playlistId, groupId, orderedTrackIds)  => ipcRenderer.invoke('playlists:reorderGroup', { playlistId, groupId, orderedTrackIds }),
+    chooseCover:        ()                                      => ipcRenderer.invoke('playlists:chooseCover'),
+    searchImageBrowser: (query)                                 => ipcRenderer.invoke('playlists:searchImageBrowser', query),
+    export:             (id)                                    => ipcRenderer.invoke('playlists:export', id),
+    import:             ()                                      => ipcRenderer.invoke('playlists:import'),
+    toggleGroups:       (id)                                    => ipcRenderer.invoke('playlists:toggleGroups', id),
+    createGroup:        (playlistId, name)                      => ipcRenderer.invoke('playlists:createGroup', { playlistId, name }),
+    deleteGroup:        (groupId)                               => ipcRenderer.invoke('playlists:deleteGroup', groupId),
+    setTrackGroup:      (playlistId, trackId, groupId, position) => ipcRenderer.invoke('playlists:setTrackGroup', { playlistId, trackId, groupId, position }),
+    getGroups:          (playlistId)                            => ipcRenderer.invoke('playlists:getGroups', playlistId),
   },
 
   // Spotify
@@ -98,12 +99,28 @@ contextBridge.exposeInMainWorld('electron', {
 
   // Auto-updater
   updater: {
-    check:        ()    => ipcRenderer.invoke('update:check'),
-    openDownload: (url) => ipcRenderer.send('update:openDownload', url),
-    onAvailable:  (cb)  => {
-      const handler = (_, info) => cb(info)
-      ipcRenderer.on('update:available', handler)
-      return () => ipcRenderer.removeListener('update:available', handler)
+    check:    ()  => ipcRenderer.invoke('update:check'),
+    download: ()  => ipcRenderer.invoke('update:download'),
+    install:  ()  => ipcRenderer.invoke('update:install'),
+    onAvailable: (cb) => {
+      const h = (_, info) => cb(info)
+      ipcRenderer.on('update:available', h)
+      return () => ipcRenderer.removeListener('update:available', h)
+    },
+    onProgress: (cb) => {
+      const h = (_, p) => cb(p)
+      ipcRenderer.on('update:progress', h)
+      return () => ipcRenderer.removeListener('update:progress', h)
+    },
+    onDownloaded: (cb) => {
+      const h = (_, info) => cb(info)
+      ipcRenderer.on('update:downloaded', h)
+      return () => ipcRenderer.removeListener('update:downloaded', h)
+    },
+    onError: (cb) => {
+      const h = (_, msg) => cb(msg)
+      ipcRenderer.on('update:error', h)
+      return () => ipcRenderer.removeListener('update:error', h)
     },
   },
 })

@@ -131,7 +131,7 @@ module.exports = function registerPlaylistHandlers(ipcMain) {
     return true
   })
 
-  ipcMain.handle('playlists:setTrackGroup', (_, { playlistId, trackId, groupId }) => {
+  ipcMain.handle('playlists:setTrackGroup', (_, { playlistId, trackId, groupId, position }) => {
     const db = getDB()
     const pt = db.playlistTracks.read()
     const row = pt.find(r => r.playlist_id === playlistId && r.track_id === trackId)
@@ -140,12 +140,25 @@ module.exports = function registerPlaylistHandlers(ipcMain) {
       row.group_id = null
       row.group_position = 0
     } else {
-      const maxPos = pt
-        .filter(r => r.playlist_id === playlistId && r.group_id === groupId)
-        .reduce((m, r) => Math.max(m, r.group_position ?? -1), -1)
+      // If position is explicitly provided (e.g. from cloud sync), use it directly
+      const pos = (position !== undefined && position !== null)
+        ? position
+        : pt.filter(r => r.playlist_id === playlistId && r.group_id === groupId)
+             .reduce((m, r) => Math.max(m, r.group_position ?? -1), -1) + 1
       row.group_id = groupId
-      row.group_position = maxPos + 1
+      row.group_position = pos
     }
+    db.playlistTracks.write(pt)
+    return true
+  })
+
+  ipcMain.handle('playlists:reorderGroup', (_, { playlistId, groupId, orderedTrackIds }) => {
+    const db = getDB()
+    const pt = db.playlistTracks.read()
+    orderedTrackIds.forEach((trackId, i) => {
+      const row = pt.find(r => r.playlist_id === playlistId && r.group_id === groupId && r.track_id === trackId)
+      if (row) row.group_position = i
+    })
     db.playlistTracks.write(pt)
     return true
   })
@@ -268,24 +281,35 @@ module.exports = function registerPlaylistHandlers(ipcMain) {
     let added = 0
     let created = 0
 
+    // Map import index → matched track id — used later for group assignment
+    // to guarantee we use the SAME track that was stored in the playlist row
+    const importIndexToTrackId = {}
+
     for (let i = 0; i < data.tracks.length; i++) {
       const imp = data.tracks[i]
       const impTitle  = norm(imp.title)
       const impArtist = norm(imp.artist)
 
-      // 1. Exact title + artist match
-      let match = allTracks.find(t =>
-        norm(t.title) === impTitle && norm(t.artist) === impArtist
-      )
+      // 1. yt_url match (most reliable)
+      let match = imp.yt_url
+        ? allTracks.find(t => t.yt_url && t.yt_url === imp.yt_url)
+        : null
 
-      // 2. Title match only — covers "Desconhecido" vs real artist, or re-tagged files
+      // 2. Exact title + artist match
+      if (!match) {
+        match = allTracks.find(t =>
+          norm(t.title) === impTitle && norm(t.artist) === impArtist
+        )
+      }
+
+      // 3. Title match only — covers "Desconhecido" vs real artist, or re-tagged files
       if (!match) {
         match = allTracks.find(t =>
           norm(t.title) === impTitle && t.file_path  // real file only
         )
       }
 
-      // 3. Duration-guided title fuzzy — same title prefix and duration within 3s
+      // 4. Duration-guided title fuzzy — same title prefix and duration within 3s
       if (!match && imp.duration) {
         match = allTracks.find(t =>
           t.file_path &&
@@ -323,6 +347,8 @@ module.exports = function registerPlaylistHandlers(ipcMain) {
         if (changed) match.updated_at = Date.now()
       }
 
+      importIndexToTrackId[i] = match.id  // remember which track was used
+
       if (!pt.find(r => r.playlist_id === playlist.id && r.track_id === match.id)) {
         pt.push({ id: uuidv4(), playlist_id: playlist.id, track_id: match.id, position: i })
         added++
@@ -347,18 +373,15 @@ module.exports = function registerPlaylistHandlers(ipcMain) {
       })
       db.playlistGroups.write(groups)
 
-      // Assign group memberships to playlist tracks
+      // Assign group memberships using the importIndexToTrackId map
+      // (guarantees same track_id that was written to playlistTracks)
       const ptFinal = db.playlistTracks.read()
-      const norm = s => (s || '').toLowerCase().trim()
-      data.tracks.forEach(imp => {
+      data.tracks.forEach((imp, i) => {
         if (!imp.group_name || !(imp.group_name in groupNameToId)) return
         const groupId = groupNameToId[imp.group_name]
-        // Find the matching playlist track row
-        const trackMatch = allTracks.find(t =>
-          norm(t.title) === norm(imp.title) && norm(t.artist) === norm(imp.artist)
-        ) || allTracks.find(t => norm(t.title) === norm(imp.title))
-        if (!trackMatch) return
-        const row = ptFinal.find(r => r.playlist_id === playlist.id && r.track_id === trackMatch.id)
+        const trackId = importIndexToTrackId[i]
+        if (!trackId) return
+        const row = ptFinal.find(r => r.playlist_id === playlist.id && r.track_id === trackId)
         if (row) {
           row.group_id       = groupId
           row.group_position = imp.group_position ?? 0

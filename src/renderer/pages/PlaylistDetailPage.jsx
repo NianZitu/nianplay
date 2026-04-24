@@ -3,7 +3,7 @@ import {
   ArrowLeft, Play, Shuffle, SlidersHorizontal, Plus,
   Trash2, Loader2, CheckCircle2, AlertCircle,
   X, Search, ExternalLink, Pencil, Check, ListPlus, Settings2, Download,
-  DownloadCloud, AlertTriangle, FolderOpen, Tag, Folder, ChevronDown,
+  DownloadCloud, AlertTriangle, FolderOpen, Tag, Folder, ChevronDown, GripVertical,
 } from 'lucide-react'
 import { usePlayer } from '../store/PlayerContext'
 import MaestroModal from '../components/MaestroModal'
@@ -561,8 +561,36 @@ function shuffleArray(arr) {
   return a
 }
 
-function GroupFolder({ group, groupTracks, expanded, onToggle, onPlayGroup, onPlay, currentTrack, isPlaying }) {
+function GroupFolder({ group, groupTracks, expanded, onToggle, onPlayGroup, onPlay, currentTrack, isPlaying, onReorderGroup }) {
   const hasActive = groupTracks.some(t => t.id === currentTrack?.id)
+  const [dragId, setDragId] = useState(null)
+  const [overId, setOverId] = useState(null)
+
+  function handleDragStart(e, trackId) {
+    setDragId(trackId)
+    e.dataTransfer.effectAllowed = 'move'
+  }
+  function handleDragOver(e, trackId) {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    setOverId(trackId)
+  }
+  function handleDrop(e, targetId) {
+    e.preventDefault()
+    if (!dragId || dragId === targetId) { setDragId(null); setOverId(null); return }
+    const ids  = groupTracks.map(t => t.id)
+    const from = ids.indexOf(dragId)
+    const to   = ids.indexOf(targetId)
+    if (from === -1 || to === -1) { setDragId(null); setOverId(null); return }
+    const next = [...ids]
+    next.splice(from, 1)
+    next.splice(to, 0, dragId)
+    onReorderGroup?.(group.id, next)
+    setDragId(null)
+    setOverId(null)
+  }
+  function handleDragEnd() { setDragId(null); setOverId(null) }
+
   return (
     <div className="relative">
       {/* Colored left stripe */}
@@ -603,14 +631,24 @@ function GroupFolder({ group, groupTracks, expanded, onToggle, onPlayGroup, onPl
           style={{ borderColor: group.color + '30' }}
         >
           {groupTracks.map((track, i) => {
-            const active = currentTrack?.id === track.id
+            const active     = currentTrack?.id === track.id
+            const isDragging = dragId === track.id
+            const isOver     = overId === track.id && dragId !== track.id
             return (
               <div
                 key={track.id}
+                draggable
+                onDragStart={e => handleDragStart(e, track.id)}
+                onDragOver={e => handleDragOver(e, track.id)}
+                onDrop={e => handleDrop(e, track.id)}
+                onDragEnd={handleDragEnd}
                 onDoubleClick={() => onPlay(track)}
-                className={`flex items-center gap-2.5 px-2 py-2 rounded-lg cursor-pointer transition-colors group
-                  ${active ? 'bg-brand-600/10' : 'hover:bg-white/5'}`}
+                className={`flex items-center gap-2.5 px-2 py-2 rounded-lg cursor-pointer transition-colors group border
+                  ${active ? 'bg-brand-600/10' : 'hover:bg-white/5'}
+                  ${isDragging ? 'opacity-40' : ''}
+                  ${isOver ? 'border-brand-400/50 bg-brand-600/5' : 'border-transparent'}`}
               >
+                <GripVertical size={12} className="text-white/20 shrink-0 cursor-grab active:cursor-grabbing" />
                 <span className="text-xs text-white/20 w-4 text-center shrink-0 group-hover:hidden">
                   {active && isPlaying ? '' : i + 1}
                 </span>
@@ -810,6 +848,19 @@ export default function PlaylistDetailPage({ playlist, onBack }) {
     await window.electron.playlists.deleteGroup(groupId)
     setGroups(prev => prev.filter(g => g.id !== groupId))
     setTracks(prev => prev.map(t => t.group_id === groupId ? { ...t, group_id: null, group_position: 0 } : t))
+  }
+
+  async function handleReorderGroup(groupId, orderedTrackIds) {
+    if (!window.electron) return
+    await window.electron.playlists.reorderGroup(playlist.id, groupId, orderedTrackIds)
+    setTracks(prev => {
+      const next = [...prev]
+      orderedTrackIds.forEach((trackId, i) => {
+        const idx = next.findIndex(t => t.id === trackId)
+        if (idx !== -1) next[idx] = { ...next[idx], group_position: i }
+      })
+      return next
+    })
   }
 
   async function handleSetTrackGroup(trackId, groupId) {
@@ -1100,6 +1151,7 @@ export default function PlaylistDetailPage({ playlist, onBack }) {
                     onPlay={handlePlay}
                     currentTrack={currentTrack}
                     isPlaying={isPlaying}
+                    onReorderGroup={handleReorderGroup}
                   />
                 ))}
                 {groupsWithTracks.length === 0 && (

@@ -28,6 +28,29 @@ async function commitInChunks(ops) {
   }
 }
 
+// ─── Delete ALL cloud data for a user (full replace before re-upload) ────────
+async function deleteAllCloudData(uid) {
+  const delOps = []
+
+  // Tracks
+  const tSnap = await getDocs(collection(db, 'users', uid, 'tracks'))
+  tSnap.docs.forEach(d => delOps.push(b => b.delete(d.ref)))
+
+  // Playlists + subcollections
+  const plSnap = await getDocs(collection(db, 'users', uid, 'playlists'))
+  for (const plDoc of plSnap.docs) {
+    const [ptSnap, grpSnap] = await Promise.all([
+      getDocs(collection(db, 'users', uid, 'playlists', plDoc.id, 'tracks')),
+      getDocs(collection(db, 'users', uid, 'playlists', plDoc.id, 'groups')),
+    ])
+    ptSnap.docs.forEach(d  => delOps.push(b => b.delete(d.ref)))
+    grpSnap.docs.forEach(d => delOps.push(b => b.delete(d.ref)))
+    delOps.push(b => b.delete(plDoc.ref))
+  }
+
+  if (delOps.length > 0) await commitInChunks(delOps)
+}
+
 export function AuthProvider({ children }) {
   const [user,       setUser]       = useState(undefined) // undefined = loading
   const [syncStatus, setSyncStatus] = useState({ uploading: false, downloading: false, error: null, lastSync: null })
@@ -61,6 +84,9 @@ export function AuthProvider({ children }) {
         window.electron.library.getTracks(),
         window.electron.playlists.getAll(),
       ])
+
+      // Wipe existing cloud data so stale entries don't linger after edits/deletes
+      await deleteAllCloudData(user.uid)
 
       const ops = []
 
@@ -233,7 +259,7 @@ export function AuthProvider({ children }) {
               (t.artist || '').toLowerCase() === (pt.artist || '').toLowerCase()
             )
             if (localMatch && !localMatch.group_id) {
-              await window.electron.playlists.setTrackGroup(localPl.id, localMatch.id, groupId)
+              await window.electron.playlists.setTrackGroup(localPl.id, localMatch.id, groupId, pt.group_position ?? 0)
             }
           }
         }
