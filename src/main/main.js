@@ -89,6 +89,7 @@ app.whenReady().then(async () => {
   require('./handlers/window')(ipcMain, mainWindow)
   require('./handlers/playlists')(ipcMain)
   require('./handlers/spotify')(ipcMain)
+  require('./handlers/youtube')(ipcMain)
   require('./handlers/ytSearch')(ipcMain)
   require('./handlers/lufs')(ipcMain, mainWindow)
   require('./handlers/lyrics')(ipcMain)

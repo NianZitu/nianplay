@@ -184,6 +184,28 @@ export function PlayerProvider({ children }) {
     }
   }, [])
 
+  const playQueueIndex = useCallback((queueIdx) => {
+    const q = queueRef.current
+    if (queueIdx < 0 || queueIdx >= q.length) return
+
+    if (!audioRef.current) {
+      playTrack(q[queueIdx], q)
+      return
+    }
+
+    if (shuffleRef.current) {
+      const pos = shuffledOrderRef.current.findIndex(i => i === queueIdx)
+      if (pos >= 0) {
+        shuffledPosRef.current = pos
+        setShuffledPos(pos)
+      } else {
+        buildShuffleOrder(queueIdx, q.length)
+      }
+    }
+
+    _playByIdx(queueIdx)
+  }, [playTrack])
+
   const skipPrev = useCallback(() => {
     const q   = queueRef.current
     if (q.length === 0) return
@@ -229,18 +251,23 @@ export function PlayerProvider({ children }) {
   }, [])
 
   // Upcoming queue: tracks that will play next (in shuffled or normal order)
-  const upcomingTracks = (() => {
+  const upcomingItems = (() => {
     if (queue.length === 0) return []
     if (shuffle && shuffledOrder.length > 0) {
-      return shuffledOrder.slice(shuffledPos + 1).map(i => queue[i]).filter(Boolean)
+      return shuffledOrder.slice(shuffledPos + 1)
+        .map(i => ({ track: queue[i], queueIndex: i }))
+        .filter(item => item.track)
     }
     if (currentIdx < 0) return []
     const after = []
     for (let i = 1; i < queue.length; i++) {
-      after.push(queue[(currentIdx + i) % queue.length])
+      const queueIndex = (currentIdx + i) % queue.length
+      after.push({ track: queue[queueIndex], queueIndex })
     }
     return after
   })()
+
+  const upcomingTracks = upcomingItems.map(item => item.track)
 
   return (
     <PlayerContext.Provider value={{
@@ -254,7 +281,8 @@ export function PlayerProvider({ children }) {
       upcomingTracks,
       anchorTrack, setAnchorTrack,
       groupsEnabled, setGroupsEnabled,
-      playTrack, playNext, togglePlay, skipNext, skipPrev, seek, setVolume,
+      playTrack, playNext, playQueueIndex, togglePlay, skipNext, skipPrev, seek, setVolume,
+      upcomingItems,
       gainNode: gainRef,
       audioContext: contextRef,
     }}>

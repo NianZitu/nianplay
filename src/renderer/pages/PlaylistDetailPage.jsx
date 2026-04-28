@@ -4,9 +4,85 @@ import {
   Trash2, Loader2, CheckCircle2, AlertCircle,
   X, Search, ExternalLink, Pencil, Check, ListPlus, Settings2, Download,
   DownloadCloud, AlertTriangle, FolderOpen, Tag, Folder, ChevronDown, GripVertical,
+  Youtube,
 } from 'lucide-react'
 import { usePlayer } from '../store/PlayerContext'
 import MaestroModal from '../components/MaestroModal'
+
+function YoutubeExportModal({ playlist, onClose, onDone }) {
+  const [privacy, setPrivacy] = useState('private')
+  const [running, setRunning] = useState(false)
+  const [result,  setResult]  = useState(null)
+
+  async function handleExport() {
+    if (!window.electron) return
+    setRunning(true)
+    setResult(null)
+    const res = await window.electron.youtube.exportPlaylist({ playlistId: playlist.id, privacyStatus: privacy })
+    setRunning(false)
+    setResult(res)
+    if (res?.ok) onDone?.(res)
+  }
+
+  const options = [
+    { id: 'private',  label: 'Privada' },
+    { id: 'unlisted', label: 'Não listada' },
+    { id: 'public',   label: 'Pública' },
+  ]
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="bg-surface-800 border border-white/10 rounded-2xl p-6 w-[440px] flex flex-col gap-4 shadow-2xl">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-semibold text-white flex items-center gap-2">
+            <Youtube size={17} className="text-red-400" /> Exportar para YouTube
+          </h2>
+          <button onClick={onClose} disabled={running} className="btn-ghost p-1 text-white/40"><X size={16} /></button>
+        </div>
+
+        <p className="text-xs text-white/40">
+          Cria uma playlist no seu canal usando os links do YouTube salvos nas músicas.
+        </p>
+
+        <div>
+          <label className="text-xs text-white/40 mb-2 block">Privacidade</label>
+          <div className="grid grid-cols-3 gap-2">
+            {options.map(opt => (
+              <button
+                key={opt.id}
+                onClick={() => setPrivacy(opt.id)}
+                disabled={running}
+                className={`px-3 py-2 rounded-lg text-xs border transition-all ${privacy === opt.id ? 'bg-brand-600/30 border-brand-500/50 text-brand-200' : 'border-white/10 text-white/50 hover:text-white hover:bg-white/5'}`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {result?.error && (
+          <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2 text-xs text-red-300">
+            {result.error}
+          </div>
+        )}
+
+        {result?.ok && (
+          <div className="rounded-lg bg-green-500/10 border border-green-500/20 px-3 py-2 text-xs text-green-300">
+            Playlist criada com {result.added} vídeos.
+            {result.skipped > 0 ? ` ${result.skipped} faixa(s) sem link foram ignoradas.` : ''}
+          </div>
+        )}
+
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose} disabled={running} className="btn-ghost px-4 py-2 text-sm">Fechar</button>
+          <button onClick={handleExport} disabled={running} className="btn-primary px-4 py-2 text-sm flex items-center gap-2">
+            {running ? <><Loader2 size={14} className="animate-spin" /> Enviando...</> : <><Youtube size={14} /> Criar no YouTube</>}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 function EqualizeModal({ playlist, tracks, onClose }) {
   const [anchorId,  setAnchorId]  = useState(tracks[0]?.id || '')
@@ -693,6 +769,7 @@ export default function PlaylistDetailPage({ playlist, onBack }) {
   const [maestroTrack,   setMaestroTrack]   = useState(null)
   const [exporting,      setExporting]      = useState(false)
   const [exportToast,    setExportToast]    = useState(null)
+  const [showYoutubeExport, setShowYoutubeExport] = useState(false)
   const [showMissing,    setShowMissing]    = useState(false)
   // Groups state
   const [groups,         setGroups]         = useState([])
@@ -1004,6 +1081,9 @@ export default function PlaylistDetailPage({ playlist, onBack }) {
             </button>
             <button onClick={handleExport} disabled={exporting || !tracks.length} className="btn-ghost flex items-center gap-2 text-sm px-4 py-2 disabled:opacity-40" title="Exportar playlist">
               <Download size={14} /> {exporting ? 'Exportando...' : 'Exportar'}
+            </button>
+            <button onClick={() => setShowYoutubeExport(true)} disabled={!tracks.length} className="btn-ghost flex items-center gap-2 text-sm px-4 py-2 disabled:opacity-40" title="Criar playlist no YouTube">
+              <Youtube size={14} /> YouTube
             </button>
             <button
               onClick={handleToggleGroups}
@@ -1322,6 +1402,16 @@ export default function PlaylistDetailPage({ playlist, onBack }) {
         />
       )}
       {showEqualize && <EqualizeModal playlist={playlist} tracks={tracks} onClose={() => setShowEqualize(false)} />}
+      {showYoutubeExport && (
+        <YoutubeExportModal
+          playlist={playlist}
+          onClose={() => setShowYoutubeExport(false)}
+          onDone={(res) => {
+            setExportToast(`YouTube: ${res.added} vídeos adicionados`)
+            setTimeout(() => setExportToast(null), 3000)
+          }}
+        />
+      )}
       {showMissing && (
         <DownloadMissingModal
           tracks={tracks.filter(t => !t.file_path)}

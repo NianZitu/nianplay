@@ -52,6 +52,7 @@ contextBridge.exposeInMainWorld('electron', {
     searchImageBrowser: (query)                                 => ipcRenderer.invoke('playlists:searchImageBrowser', query),
     export:             (id)                                    => ipcRenderer.invoke('playlists:export', id),
     import:             ()                                      => ipcRenderer.invoke('playlists:import'),
+    importCommunity:    (playlistData)                          => ipcRenderer.invoke('playlists:importCommunity', playlistData),
     duplicate:          (id)                                    => ipcRenderer.invoke('playlists:duplicate', id),
     merge:              (opts)                                  => ipcRenderer.invoke('playlists:merge', opts),
     toggleGroups:       (id)                                    => ipcRenderer.invoke('playlists:toggleGroups', id),
@@ -69,6 +70,11 @@ contextBridge.exposeInMainWorld('electron', {
   // YouTube Search
   ytSearch: {
     search: (query) => ipcRenderer.invoke('ytSearch:search', query),
+  },
+
+  // YouTube playlist export
+  youtube: {
+    exportPlaylist: (opts) => ipcRenderer.invoke('youtube:exportPlaylist', opts),
   },
 
   // LUFS / Equalization

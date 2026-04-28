@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Save, FolderOpen, Info, Cookie, AlertTriangle, CheckCircle } from 'lucide-react'
+import { Save, FolderOpen, Info, Cookie, AlertTriangle, CheckCircle, Youtube } from 'lucide-react'
 
 const BROWSERS = [
   { value: 'auto',    label: 'Auto-detectar' },
@@ -16,6 +16,9 @@ export default function SettingsPage() {
   const [autoScan,      setAutoScan]      = useState(false)
   const [cookieBrowser, setCookieBrowser] = useState('auto')
   const [cookiesFile,   setCookiesFile]   = useState('')
+  const [youtubeClientId,     setYoutubeClientId]     = useState('')
+  const [youtubeClientSecret, setYoutubeClientSecret] = useState('')
+  const [youtubeRefreshToken, setYoutubeRefreshToken] = useState('')
   const [saved,         setSaved]         = useState(false)
 
   const isElectron = !!window.electron
@@ -28,6 +31,9 @@ export default function SettingsPage() {
       setAutoScan(all.autoScan          || false)
       setCookieBrowser(all.cookieBrowser || 'auto')
       setCookiesFile(all.cookiesFile    || '')
+      setYoutubeClientId(all.youtubeClientId || '')
+      setYoutubeClientSecret(all.youtubeClientSecret || '')
+      setYoutubeRefreshToken(all.youtubeRefreshToken || '')
     })
   }, [])
 
@@ -38,6 +44,9 @@ export default function SettingsPage() {
     await window.electron.settings.set('autoScan',      autoScan)
     await window.electron.settings.set('cookieBrowser', cookieBrowser)
     await window.electron.settings.set('cookiesFile',   cookiesFile)
+    await window.electron.settings.set('youtubeClientId', youtubeClientId.trim())
+    await window.electron.settings.set('youtubeClientSecret', youtubeClientSecret.trim())
+    await window.electron.settings.set('youtubeRefreshToken', youtubeRefreshToken.trim())
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
   }
@@ -166,6 +175,51 @@ export default function SettingsPage() {
                 </p>
               )}
             </div>
+          </div>
+        </section>
+
+        {/* YouTube */}
+        <section className="card p-5 flex flex-col gap-4">
+          <h2 className="text-sm font-semibold text-white/80 flex items-center gap-2">
+            <Youtube size={15} className="text-red-400" /> Exportar playlists para YouTube
+          </h2>
+
+          <div className="bg-surface-700/50 rounded-lg p-3 border border-white/5 text-xs text-white/35 leading-relaxed">
+            Use credenciais OAuth do Google com escopo <span className="text-white/60">youtube.force-ssl</span>.
+            O NianPlay cria uma playlist no seu canal e adiciona os vídeos usando os links salvos nos metadados das músicas.
+          </div>
+
+          <div>
+            <label className="text-xs text-white/40 mb-1.5 block">Client ID</label>
+            <input
+              type="text"
+              value={youtubeClientId}
+              onChange={e => setYoutubeClientId(e.target.value)}
+              placeholder="Client ID do OAuth"
+              className="input-base w-full text-xs"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs text-white/40 mb-1.5 block">Client Secret</label>
+            <input
+              type="password"
+              value={youtubeClientSecret}
+              onChange={e => setYoutubeClientSecret(e.target.value)}
+              placeholder="Client Secret"
+              className="input-base w-full text-xs"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs text-white/40 mb-1.5 block">Refresh Token</label>
+            <input
+              type="password"
+              value={youtubeRefreshToken}
+              onChange={e => setYoutubeRefreshToken(e.target.value)}
+              placeholder="Refresh Token autorizado no YouTube"
+              className="input-base w-full text-xs"
+            />
           </div>
         </section>
 

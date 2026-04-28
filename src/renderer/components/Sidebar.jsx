@@ -1,11 +1,12 @@
 import React, { useState } from 'react'
-import { Library, Download, Settings, Disc3, ListMusic, LogIn, LogOut, User, UploadCloud, DownloadCloud, Loader2 } from 'lucide-react'
+import { Library, Download, Settings, Disc3, ListMusic, LogIn, LogOut, User, UploadCloud, DownloadCloud, Loader2, Users } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import LoginModal from './LoginModal'
 
 const NAV = [
   { id: 'library',   label: 'Biblioteca',    icon: Library },
   { id: 'playlists', label: 'Playlists',      icon: ListMusic },
+  { id: 'community', label: 'Comunidade',     icon: Users },
   { id: 'downloads', label: 'Downloads',     icon: Download },
   { id: 'settings',  label: 'Configurações', icon: Settings },
 ]

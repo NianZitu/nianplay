@@ -3,6 +3,116 @@ const { getDB } = require('../db')
 const path = require('path')
 const fs   = require('fs')
 
+function importPlaylistData(data, fallbackName = 'Playlist Importada') {
+  if (!data || !Array.isArray(data.tracks)) return { error: 'Formato nÃ£o reconhecido' }
+
+  const db = getDB()
+  const allTracks = db.tracks.read()
+  const playlist = {
+    id:             uuidv4(),
+    name:           data.name || fallbackName,
+    cover_url:      data.cover_url || '',
+    groups_enabled: Boolean(data.groups_enabled || (Array.isArray(data.groups) && data.groups.length > 0)),
+    created_at:     Date.now(),
+    updated_at:     Date.now(),
+  }
+
+  const playlists = db.playlists.read()
+  playlists.unshift(playlist)
+  db.playlists.write(playlists)
+
+  const norm = s => (s || '').toLowerCase().trim()
+  const pt = db.playlistTracks.read()
+  const importIndexToTrackId = {}
+  let created = 0
+
+  for (let i = 0; i < data.tracks.length; i++) {
+    const imp = data.tracks[i]
+    const impTitle = norm(imp.title)
+    const impArtist = norm(imp.artist)
+
+    let match = imp.yt_url
+      ? allTracks.find(t => t.yt_url && t.yt_url === imp.yt_url)
+      : null
+
+    if (!match) {
+      match = allTracks.find(t => norm(t.title) === impTitle && norm(t.artist) === impArtist)
+    }
+
+    if (!match) {
+      match = {
+        id:         uuidv4(),
+        title:      imp.title    || 'Desconhecido',
+        artist:     imp.artist   || 'Desconhecido',
+        album:      imp.album    || '',
+        duration:   imp.duration || 0,
+        file_path:  '',
+        cover_path: imp.cover_url || '',
+        genre:      imp.genre    || '',
+        year:       imp.year     || null,
+        gain:       imp.gain     || 0,
+        lyrics:     imp.lyrics   || '',
+        yt_url:     imp.yt_url   || '',
+        created_at: Date.now(),
+        updated_at: Date.now(),
+      }
+      allTracks.push(match)
+      created++
+    } else {
+      let changed = false
+      if (!match.yt_url && imp.yt_url)       { match.yt_url = imp.yt_url; changed = true }
+      if (!match.lyrics && imp.lyrics)       { match.lyrics = imp.lyrics; changed = true }
+      if (!match.cover_path && imp.cover_url){ match.cover_path = imp.cover_url; changed = true }
+      if (!match.gain && imp.gain)           { match.gain = imp.gain; changed = true }
+      if (changed) match.updated_at = Date.now()
+    }
+
+    importIndexToTrackId[i] = match.id
+    pt.push({ id: uuidv4(), playlist_id: playlist.id, track_id: match.id, position: i })
+  }
+
+  db.tracks.write(allTracks)
+  db.playlistTracks.write(pt)
+
+  if (Array.isArray(data.groups) && data.groups.length > 0) {
+    const GROUP_COLORS = ['#7c3aed', '#2563eb', '#059669', '#d97706', '#dc2626', '#db2777']
+    const groups = db.playlistGroups.read()
+    const groupNameToId = {}
+
+    data.groups.forEach((g, idx) => {
+      const newGroup = {
+        id:          uuidv4(),
+        playlist_id: playlist.id,
+        name:        g.name,
+        color:       g.color || GROUP_COLORS[idx % GROUP_COLORS.length],
+        created_at:  g.created_at || Date.now(),
+      }
+      groups.push(newGroup)
+      groupNameToId[g.name] = newGroup.id
+    })
+    db.playlistGroups.write(groups)
+
+    const ptFinal = db.playlistTracks.read()
+    data.tracks.forEach((imp, i) => {
+      if (!imp.group_name || !(imp.group_name in groupNameToId)) return
+      const row = ptFinal.find(r => r.playlist_id === playlist.id && r.track_id === importIndexToTrackId[i])
+      if (row) {
+        row.group_id = groupNameToId[imp.group_name]
+        row.group_position = imp.group_position ?? 0
+      }
+    })
+    db.playlistTracks.write(ptFinal)
+  }
+
+  return {
+    ok: true,
+    playlist,
+    trackCount: data.tracks.length,
+    matched: data.tracks.length - created,
+    created,
+  }
+}
+
 module.exports = function registerPlaylistHandlers(ipcMain) {
   ipcMain.handle('playlists:getAll', () => {
     const db = getDB()
@@ -489,5 +599,9 @@ module.exports = function registerPlaylistHandlers(ipcMain) {
       matched:     data.tracks.length - created,
       created,
     }
+  })
+
+  ipcMain.handle('playlists:importCommunity', async (_, playlistData) => {
+    return importPlaylistData(playlistData, 'Playlist da Comunidade')
   })
 }

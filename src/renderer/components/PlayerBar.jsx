@@ -10,7 +10,7 @@ function formatTime(secs) {
 }
 
 function QueuePanel({ onClose }) {
-  const { upcomingTracks, currentTrack, shuffle, playTrack, queue } = usePlayer()
+  const { upcomingItems, currentTrack, shuffle, playQueueIndex } = usePlayer()
 
   return (
     <div className="absolute bottom-full right-0 mb-2 w-80 bg-surface-800 border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50">
@@ -40,14 +40,15 @@ function QueuePanel({ onClose }) {
       )}
 
       <div className="overflow-y-auto max-h-72">
-        {upcomingTracks.length === 0 ? (
+        {upcomingItems.length === 0 ? (
           <p className="text-center text-white/20 text-xs py-6">Fila vazia</p>
         ) : (
-          upcomingTracks.slice(0, 30).map((track, i) => (
+          upcomingItems.slice(0, 30).map(({ track, queueIndex }, i) => (
             <div
               key={`${track.id}-${i}`}
-              onDoubleClick={() => playTrack(track)}
+              onClick={() => playQueueIndex(queueIndex)}
               className="flex items-center gap-2.5 px-4 py-2 hover:bg-white/5 cursor-pointer group"
+              title="Tocar agora"
             >
               <span className="text-xs text-white/20 w-4 shrink-0">{i + 1}</span>
               <div className="w-7 h-7 rounded overflow-hidden bg-surface-600 shrink-0">

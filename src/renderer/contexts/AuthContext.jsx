@@ -54,6 +54,11 @@ async function deleteAllCloudData(uid) {
   if (delOps.length > 0) await commitInChunks(delOps)
 }
 
+function publicMediaUrl(src) {
+  if (!src) return ''
+  return /^https?:\/\//.test(src) ? src : ''
+}
+
 export function AuthProvider({ children }) {
   const [user,       setUser]       = useState(undefined) // undefined = loading
   const [syncStatus, setSyncStatus] = useState({ uploading: false, downloading: false, error: null, lastSync: null })
@@ -146,6 +151,7 @@ export function AuthProvider({ children }) {
 
         // Playlist tracks (with group assignment)
         const plTracks = await window.electron.playlists.getTracks(pl.id)
+        const communityTracks = []
         for (const t of (plTracks || [])) {
           const tId   = trackCloudId(t)
           const ptRef = doc(db, 'users', user.uid, 'playlists', plId, 'tracks', tId)
@@ -157,7 +163,37 @@ export function AuthProvider({ children }) {
             group_name:     grp?.name      || null,
             group_position: grp ? (t.group_position ?? 0) : null,
           }, { merge: true }))
+
+          communityTracks.push({
+            title:          t.title     || '',
+            artist:         t.artist    || '',
+            album:          t.album     || '',
+            duration:       t.duration  || 0,
+            yt_url:         t.yt_url    || '',
+            cover_url:      publicMediaUrl(t.cover_url || t.cover_path),
+            lyrics:         t.lyrics    || '',
+            gain:           t.gain      || 0,
+            group_name:     grp?.name   || null,
+            group_position: grp ? (t.group_position ?? 0) : null,
+          })
         }
+
+        const communityRef = doc(db, 'communityPlaylists', plId)
+        ops.push(batch => batch.set(communityRef, {
+          name:           pl.name           || '',
+          cover_url:      publicMediaUrl(pl.cover_url),
+          owner_uid:      user.uid,
+          owner_name:     user.displayName || user.email?.split('@')[0] || 'Ouvinte NianPlay',
+          groups_enabled: pl.groups_enabled || false,
+          trackCount:     communityTracks.length,
+          updatedAt:      serverTimestamp(),
+          tracks:         communityTracks,
+          groups:         (plGroups || []).map(g => ({
+            name:       g.name       || '',
+            color:      g.color      || '',
+            created_at: g.created_at || 0,
+          })),
+        }, { merge: true }))
       }
 
       await commitInChunks(ops)
