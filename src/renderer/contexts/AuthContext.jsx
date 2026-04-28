@@ -106,6 +106,7 @@ export function AuthProvider({ children }) {
       await deleteAllCloudData(user.uid)
 
       const ops = []
+      const communityOps = []
 
       // Tracks
       for (const t of (tracks || [])) {
@@ -179,7 +180,7 @@ export function AuthProvider({ children }) {
         }
 
         const communityRef = doc(db, 'communityPlaylists', plId)
-        ops.push(batch => batch.set(communityRef, {
+        communityOps.push(batch => batch.set(communityRef, {
           name:           pl.name           || '',
           cover_url:      publicMediaUrl(pl.cover_url),
           owner_uid:      user.uid,
@@ -197,6 +198,13 @@ export function AuthProvider({ children }) {
       }
 
       await commitInChunks(ops)
+
+      try {
+        if (communityOps.length > 0) await commitInChunks(communityOps)
+      } catch (communityError) {
+        console.warn('[Sync] Community publish skipped:', communityError)
+      }
+
       setSyncStatus(s => ({ ...s, uploading: false, lastSync: Date.now() }))
     } catch (e) {
       console.error('[Sync] Upload failed:', e)

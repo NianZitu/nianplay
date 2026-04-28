@@ -17,6 +17,7 @@ export default function CommunityPage() {
   const [queryText, setQueryText] = useState('')
   const [importing, setImporting] = useState(null)
   const [toast,     setToast]     = useState(null)
+  const [loadError, setLoadError] = useState('')
 
   useEffect(() => { loadCommunity() }, [])
 
@@ -27,12 +28,15 @@ export default function CommunityPage() {
 
   async function loadCommunity() {
     setLoading(true)
+    setLoadError('')
     try {
       const q = query(collection(db, 'communityPlaylists'), orderBy('updatedAt', 'desc'))
       const snap = await getDocs(q)
       setPlaylists(snap.docs.map(d => ({ id: d.id, ...d.data() })))
     } catch (e) {
-      showToast(e.message || 'Erro ao carregar comunidade', false)
+      const msg = e.message || 'Erro ao carregar comunidade'
+      setLoadError(msg)
+      showToast(msg, false)
     } finally {
       setLoading(false)
     }
@@ -85,6 +89,12 @@ export default function CommunityPage() {
           </div>
         )}
 
+        {loadError && (
+          <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-xs text-red-200">
+            A comunidade ainda não está liberada nas regras do Firebase.
+          </div>
+        )}
+
         <div className="relative max-w-md">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
           <input
@@ -108,7 +118,7 @@ export default function CommunityPage() {
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24 text-white/20 gap-3">
             <ListMusic size={40} strokeWidth={1.2} />
-            <p className="text-sm">Nenhuma playlist encontrada</p>
+            <p className="text-sm">{loadError ? 'Comunidade indisponível' : 'Nenhuma playlist encontrada'}</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
