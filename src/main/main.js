@@ -82,6 +82,8 @@ async function ensureYtDlp() {
 app.whenReady().then(async () => {
   createWindow()
 
+  ipcMain.handle('app:getVersion', () => app.getVersion())
+
   require('./db').initDB()
   require('./handlers/library')(ipcMain)
   require('./handlers/downloader')(ipcMain, mainWindow)

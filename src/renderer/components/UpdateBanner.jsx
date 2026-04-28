@@ -31,6 +31,7 @@ export default function UpdateBanner() {
         setErrMsg(typeof msg === 'string' ? msg : 'Erro ao atualizar')
       }),
     ]
+    setTimeout(() => window.electron.updater.check(), 1500)
     return () => unsubs.forEach(u => u?.())
   }, [])
 

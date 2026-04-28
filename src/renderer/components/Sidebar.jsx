@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Library, Download, Settings, Disc3, ListMusic, LogIn, LogOut, User, UploadCloud, DownloadCloud, Loader2, Users } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import LoginModal from './LoginModal'
@@ -15,9 +15,14 @@ export default function Sidebar({ activePage, onNavigate }) {
   const { user, logout, syncToCloud, syncFromCloud, syncStatus } = useAuth() || {}
   const [showLogin, setShowLogin] = useState(false)
   const [syncMenu,  setSyncMenu]  = useState(false)
+  const [version,   setVersion]   = useState('')
 
   const effectivePage = activePage === 'playlist-detail' ? 'playlists' : activePage
   const isSyncing = syncStatus?.uploading || syncStatus?.downloading
+
+  useEffect(() => {
+    window.electron?.app?.getVersion?.().then(setVersion).catch(() => {})
+  }, [])
 
   async function handleLogout() {
     setSyncMenu(false)
@@ -117,7 +122,7 @@ export default function Sidebar({ activePage, onNavigate }) {
 
           <div className="flex items-center gap-2 text-white/20 px-1">
             <Disc3 size={14} />
-            <span className="text-xs">v1.0.0</span>
+            <span className="text-xs">v{version || '...'}</span>
           </div>
         </div>
       </aside>

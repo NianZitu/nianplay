@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Save, FolderOpen, Info, Cookie, AlertTriangle, CheckCircle, Youtube } from 'lucide-react'
+import { Save, FolderOpen, Info, Cookie, AlertTriangle, CheckCircle, Youtube, RefreshCw, Download, CheckCircle2, Loader2 } from 'lucide-react'
 
 const BROWSERS = [
   { value: 'auto',    label: 'Auto-detectar' },
@@ -19,6 +19,11 @@ export default function SettingsPage() {
   const [youtubeClientId,     setYoutubeClientId]     = useState('')
   const [youtubeClientSecret, setYoutubeClientSecret] = useState('')
   const [youtubeRefreshToken, setYoutubeRefreshToken] = useState('')
+  const [appVersion,          setAppVersion]          = useState('')
+  const [updateInfo,          setUpdateInfo]          = useState(null)
+  const [updatePhase,         setUpdatePhase]         = useState('idle')
+  const [updateMessage,       setUpdateMessage]       = useState('')
+  const [updateProgress,      setUpdateProgress]      = useState(0)
   const [saved,         setSaved]         = useState(false)
 
   const isElectron = !!window.electron
@@ -35,7 +40,53 @@ export default function SettingsPage() {
       setYoutubeClientSecret(all.youtubeClientSecret || '')
       setYoutubeRefreshToken(all.youtubeRefreshToken || '')
     })
+    window.electron.app?.getVersion?.().then(setAppVersion).catch(() => {})
   }, [])
+
+  useEffect(() => {
+    if (!window.electron?.updater) return
+    const unsubs = [
+      window.electron.updater.onAvailable(info => {
+        setUpdateInfo(info)
+        setUpdatePhase('available')
+        setUpdateMessage(`Nova versão ${info.version} disponível`)
+      }),
+      window.electron.updater.onProgress(p => {
+        setUpdatePhase('downloading')
+        setUpdateProgress(p.percent ?? 0)
+      }),
+      window.electron.updater.onDownloaded(info => {
+        setUpdatePhase('downloaded')
+        setUpdateMessage(`Atualização pronta para instalar`)
+      }),
+      window.electron.updater.onError(msg => {
+        setUpdatePhase('error')
+        setUpdateMessage(typeof msg === 'string' ? msg : 'Erro ao verificar atualização')
+      }),
+    ]
+    return () => unsubs.forEach(u => u?.())
+  }, [])
+
+  async function handleCheckUpdate() {
+    if (!window.electron?.updater) return
+    setUpdatePhase('checking')
+    setUpdateMessage('Verificando atualização...')
+    await window.electron.updater.check()
+    setTimeout(() => {
+      setUpdatePhase(phase => phase === 'checking' ? 'idle' : phase)
+      setUpdateMessage(msg => msg === 'Verificando atualização...' ? 'Nenhuma atualização encontrada agora.' : msg)
+    }, 5000)
+  }
+
+  function handleDownloadUpdate() {
+    setUpdatePhase('downloading')
+    setUpdateProgress(0)
+    window.electron.updater.download()
+  }
+
+  function handleInstallUpdate() {
+    window.electron.updater.install()
+  }
 
   async function handleSave() {
     if (!isElectron) return
@@ -229,9 +280,48 @@ export default function SettingsPage() {
             <Info size={14} className="text-brand-400" /> Sobre
           </h2>
           <div className="text-xs text-white/40 space-y-1">
-            <p>NianPlay v1.0.0</p>
+            <p>NianPlay v{appVersion || '...'}</p>
             <p>Electron · React · Tailwind CSS</p>
             <p>Powered by yt-dlp & ffmpeg</p>
+          </div>
+        </section>
+
+        {/* Updates */}
+        <section className="card p-5 flex flex-col gap-4">
+          <h2 className="text-sm font-semibold text-white/80 flex items-center gap-2">
+            <RefreshCw size={14} className="text-brand-400" /> Atualizações
+          </h2>
+
+          {updateMessage && (
+            <p className={`text-xs ${updatePhase === 'error' ? 'text-red-400' : updatePhase === 'downloaded' ? 'text-green-400' : 'text-white/45'}`}>
+              {updateMessage}
+            </p>
+          )}
+
+          {updatePhase === 'downloading' && (
+            <div className="flex items-center gap-2">
+              <div className="flex-1 h-1.5 bg-white/10 rounded-full overflow-hidden">
+                <div className="h-full bg-brand-500 rounded-full" style={{ width: `${updateProgress}%` }} />
+              </div>
+              <span className="text-xs text-white/40">{Math.round(updateProgress)}%</span>
+            </div>
+          )}
+
+          <div className="flex flex-wrap gap-2">
+            <button onClick={handleCheckUpdate} disabled={updatePhase === 'checking' || updatePhase === 'downloading'} className="btn-ghost text-sm px-3 py-2 flex items-center gap-2 disabled:opacity-40">
+              {updatePhase === 'checking' ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+              Verificar agora
+            </button>
+            {updatePhase === 'available' && (
+              <button onClick={handleDownloadUpdate} className="btn-primary text-sm px-3 py-2 flex items-center gap-2">
+                <Download size={14} /> Baixar atualização
+              </button>
+            )}
+            {updatePhase === 'downloaded' && (
+              <button onClick={handleInstallUpdate} className="btn-primary text-sm px-3 py-2 flex items-center gap-2">
+                <CheckCircle2 size={14} /> Instalar e reiniciar
+              </button>
+            )}
           </div>
         </section>
 

@@ -1,6 +1,10 @@
 const { contextBridge, ipcRenderer } = require('electron')
 
 contextBridge.exposeInMainWorld('electron', {
+  app: {
+    getVersion: () => ipcRenderer.invoke('app:getVersion'),
+  },
+
   // Window controls
   window: {
     minimize:    () => ipcRenderer.invoke('window:minimize'),
