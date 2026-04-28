@@ -15,6 +15,72 @@ function extractVideoId(url) {
   return /^[a-zA-Z0-9_-]{11}$/.test(url) ? url : null
 }
 
+function normalizeTitle(value) {
+  return (value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\.(mp3|flac|wav|aac|ogg|m4a|opus|wma|webm|mp4)$/i, '')
+    .replace(/[_-]+/g, ' ')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function titleScore(a, b) {
+  a = normalizeTitle(a)
+  b = normalizeTitle(b)
+  if (!a || !b) return 0
+  if (a === b) return 1
+  if (a.includes(b) || b.includes(a)) {
+    return Math.min(a.length, b.length) / Math.max(a.length, b.length)
+  }
+
+  const aWords = new Set(a.split(' ').filter(w => w.length > 1))
+  const bWords = new Set(b.split(' ').filter(w => w.length > 1))
+  if (!aWords.size || !bWords.size) return 0
+
+  let hits = 0
+  for (const word of aWords) {
+    if (bWords.has(word)) hits++
+  }
+  return hits / Math.max(aWords.size, bWords.size)
+}
+
+function backfillYoutubeUrlsFromDownloads(db, rows, tracks) {
+  const downloads = db.downloads.read()
+    .filter(d => d.status === 'done' && d.title && extractVideoId(d.url))
+    .sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+
+  if (!downloads.length) return { repaired: 0 }
+
+  const rowTrackIds = new Set(rows.map(r => r.track_id))
+  let repaired = 0
+
+  for (const track of tracks) {
+    if (!rowTrackIds.has(track.id) || track.yt_url) continue
+
+    let best = null
+    const fileName = require('path').basename(track.file_path || '')
+    for (const download of downloads) {
+      const score = Math.max(
+        titleScore(track.title, download.title),
+        titleScore(fileName, download.title)
+      )
+      if (!best || score > best.score) best = { score, download }
+    }
+
+    if (best && best.score >= 0.72) {
+      track.yt_url = best.download.url
+      track.updated_at = Date.now()
+      repaired++
+    }
+  }
+
+  if (repaired > 0) db.tracks.write(tracks)
+  return { repaired }
+}
+
 async function youtubeFetch(url, token, body) {
   const res = await fetch(url, {
     method: 'POST',
@@ -70,14 +136,23 @@ module.exports = function registerYoutubeHandlers(ipcMain) {
         .filter(r => r.playlist_id === playlistId)
         .sort((a, b) => a.position - b.position)
       const tracks = db.tracks.read()
-      const videoIds = rows
+
+      const { repaired } = backfillYoutubeUrlsFromDownloads(db, rows, tracks)
+
+      const playlistTracks = rows
         .map(r => tracks.find(t => t.id === r.track_id))
         .filter(Boolean)
+
+      const videoIds = playlistTracks
         .map(t => extractVideoId(t.yt_url))
         .filter(Boolean)
 
       if (!videoIds.length) {
-        return { error: 'Nenhuma faixa desta playlist tem link do YouTube salvo nos metadados.' }
+        return {
+          error: repaired
+            ? 'Encontrei links no historico, mas nenhum deles tinha um video individual valido do YouTube para esta playlist.'
+            : 'Nenhuma faixa desta playlist tem link do YouTube salvo nos metadados ou no historico de downloads.',
+        }
       }
 
       const token = await getAccessToken({ clientId, clientSecret, refreshToken })
@@ -122,7 +197,8 @@ module.exports = function registerYoutubeHandlers(ipcMain) {
         playlistId: youtubePlaylistId,
         url: `https://www.youtube.com/playlist?list=${youtubePlaylistId}`,
         added,
-        skipped: rows.length - videoIds.length,
+        skipped: playlistTracks.length - videoIds.length,
+        repaired,
         failed,
       }
     } catch (e) {
