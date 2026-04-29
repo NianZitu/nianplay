@@ -11,14 +11,24 @@ const NAV = [
   { id: 'settings',  label: 'Configurações', icon: Settings },
 ]
 
+const FRAME_CLASS = {
+  classic: 'border-brand-500/50 bg-brand-600/30',
+  neon: 'border-cyan-300 bg-cyan-400/20 shadow-[0_0_12px_rgba(34,211,238,0.35)]',
+  sunset: 'border-rose-300 bg-amber-400/20 shadow-[0_0_12px_rgba(251,113,133,0.35)]',
+  mint: 'border-emerald-300 bg-emerald-400/20 shadow-[0_0_12px_rgba(52,211,153,0.28)]',
+}
+
 export default function Sidebar({ activePage, onNavigate }) {
-  const { user, logout, syncToCloud, syncFromCloud, syncStatus } = useAuth() || {}
+  const { user, accountProfile, logout, syncToCloud, syncFromCloud, syncStatus } = useAuth() || {}
   const [showLogin, setShowLogin] = useState(false)
   const [syncMenu,  setSyncMenu]  = useState(false)
   const [version,   setVersion]   = useState('')
 
   const effectivePage = activePage === 'playlist-detail' ? 'playlists' : activePage
   const isSyncing = syncStatus?.uploading || syncStatus?.downloading
+  const avatar = accountProfile?.avatarDataUrl || ''
+  const displayName = accountProfile?.displayName || user?.displayName || user?.email?.split('@')[0]
+  const frame = FRAME_CLASS[accountProfile?.frame] || FRAME_CLASS.classic
 
   useEffect(() => {
     window.electron?.app?.getVersion?.().then(setVersion).catch(() => {})
@@ -60,12 +70,18 @@ export default function Sidebar({ activePage, onNavigate }) {
                 onClick={() => setSyncMenu(v => !v)}
                 className="flex items-center gap-2.5 w-full px-2 py-2 rounded-lg hover:bg-white/5 transition-colors text-left"
               >
-                <div className="w-7 h-7 rounded-full bg-brand-600/40 border border-brand-500/30 flex items-center justify-center shrink-0">
-                  <User size={13} className="text-brand-300" />
+                <div className={`w-8 h-8 rounded-full p-0.5 border shrink-0 ${frame}`}>
+                  <div className="w-full h-full rounded-full bg-surface-700 overflow-hidden flex items-center justify-center">
+                    {avatar ? (
+                      <img src={avatar} alt="Perfil" className="w-full h-full object-cover" />
+                    ) : (
+                      <User size={13} className="text-brand-300" />
+                    )}
+                  </div>
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-white/80 text-xs font-medium truncate">
-                    {user.displayName || user.email?.split('@')[0]}
+                    {displayName}
                   </div>
                   <div className="text-white/30 text-[10px] truncate">{user.email}</div>
                 </div>

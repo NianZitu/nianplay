@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
-import { Save, FolderOpen, Info, Cookie, AlertTriangle, CheckCircle, Youtube, RefreshCw, Download, CheckCircle2, Loader2 } from 'lucide-react'
+import { Save, FolderOpen, Info, Cookie, AlertTriangle, CheckCircle, Youtube, RefreshCw, Download, CheckCircle2, Loader2, Camera, UserRound, Sparkles } from 'lucide-react'
+import { useAuth } from '../contexts/AuthContext'
 
 const BROWSERS = [
   { value: 'auto',    label: 'Auto-detectar' },
@@ -10,7 +11,44 @@ const BROWSERS = [
   { value: 'none',    label: 'Nenhum' },
 ]
 
+const FRAME_OPTIONS = [
+  { id: 'classic', label: 'Classica', className: 'border-brand-500/50 bg-brand-600/30' },
+  { id: 'neon', label: 'Neon', className: 'border-cyan-300 bg-cyan-400/20 shadow-[0_0_16px_rgba(34,211,238,0.35)]' },
+  { id: 'sunset', label: 'Sunset', className: 'border-rose-300 bg-amber-400/20 shadow-[0_0_16px_rgba(251,113,133,0.35)]' },
+  { id: 'mint', label: 'Mint', className: 'border-emerald-300 bg-emerald-400/20 shadow-[0_0_16px_rgba(52,211,153,0.28)]' },
+]
+
+function frameClass(frame) {
+  return FRAME_OPTIONS.find(f => f.id === frame)?.className || FRAME_OPTIONS[0].className
+}
+
+function resizeImage(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onerror = reject
+    reader.onload = () => {
+      const img = new Image()
+      img.onerror = reject
+      img.onload = () => {
+        const size = 256
+        const canvas = document.createElement('canvas')
+        canvas.width = size
+        canvas.height = size
+        const ctx = canvas.getContext('2d')
+        const scale = Math.max(size / img.width, size / img.height)
+        const width = img.width * scale
+        const height = img.height * scale
+        ctx.drawImage(img, (size - width) / 2, (size - height) / 2, width, height)
+        resolve(canvas.toDataURL('image/jpeg', 0.86))
+      }
+      img.src = reader.result
+    }
+    reader.readAsDataURL(file)
+  })
+}
+
 export default function SettingsPage() {
+  const { user, accountProfile, updateAccountProfile } = useAuth() || {}
   const [libraryPath,   setLibraryPath]   = useState('')
   const [downloadPath,  setDownloadPath]  = useState('')
   const [autoScan,      setAutoScan]      = useState(false)
@@ -24,6 +62,9 @@ export default function SettingsPage() {
   const [updatePhase,         setUpdatePhase]         = useState('idle')
   const [updateMessage,       setUpdateMessage]       = useState('')
   const [updateProgress,      setUpdateProgress]      = useState(0)
+  const [profileName,         setProfileName]         = useState('')
+  const [profileAvatar,       setProfileAvatar]       = useState('')
+  const [profileFrame,        setProfileFrame]        = useState('classic')
   const [saved,         setSaved]         = useState(false)
 
   const isElectron = !!window.electron
@@ -42,6 +83,12 @@ export default function SettingsPage() {
     })
     window.electron.app?.getVersion?.().then(setAppVersion).catch(() => {})
   }, [])
+
+  useEffect(() => {
+    setProfileName(accountProfile?.displayName || user?.displayName || user?.email?.split('@')[0] || '')
+    setProfileAvatar(accountProfile?.avatarDataUrl || '')
+    setProfileFrame(accountProfile?.frame || 'classic')
+  }, [accountProfile, user])
 
   useEffect(() => {
     if (!window.electron?.updater) return
@@ -98,8 +145,21 @@ export default function SettingsPage() {
     await window.electron.settings.set('youtubeClientId', youtubeClientId.trim())
     await window.electron.settings.set('youtubeClientSecret', youtubeClientSecret.trim())
     await window.electron.settings.set('youtubeRefreshToken', youtubeRefreshToken.trim())
+    await updateAccountProfile?.({
+      displayName: profileName,
+      avatarDataUrl: profileAvatar,
+      frame: profileFrame,
+    })
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
+  }
+
+  async function handleAvatarFile(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const dataUrl = await resizeImage(file)
+    setProfileAvatar(dataUrl)
+    e.target.value = ''
   }
 
   async function pickFolder(setter) {
@@ -124,6 +184,77 @@ export default function SettingsPage() {
           <h1 className="text-lg font-semibold text-white">Configurações</h1>
           <p className="text-xs text-white/40">Preferências do NianPlay</p>
         </div>
+
+        {/* Account */}
+        <section className="card p-5 flex flex-col gap-4">
+          <h2 className="text-sm font-semibold text-white/80 flex items-center gap-2">
+            <UserRound size={15} className="text-brand-400" /> Conta
+          </h2>
+
+          {!user && (
+            <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+              Entre em uma conta para sincronizar nome, foto e moldura na nuvem.
+            </div>
+          )}
+
+          <div className="flex items-center gap-4">
+            <div className={`w-20 h-20 rounded-full p-1 border-2 ${frameClass(profileFrame)}`}>
+              <div className="w-full h-full rounded-full overflow-hidden bg-surface-700 flex items-center justify-center">
+                {profileAvatar ? (
+                  <img src={profileAvatar} alt="Foto de perfil" className="w-full h-full object-cover" />
+                ) : (
+                  <UserRound size={28} className="text-white/35" />
+                )}
+              </div>
+            </div>
+
+            <div className="flex-1 min-w-0">
+              <label className="text-xs text-white/40 mb-1.5 block">Nome publico</label>
+              <input
+                type="text"
+                value={profileName}
+                onChange={e => setProfileName(e.target.value)}
+                placeholder="Seu nome no NianPlay"
+                className="input-base w-full text-sm"
+                maxLength={40}
+              />
+              <div className="flex gap-2 mt-2">
+                <label className="btn-ghost text-xs px-3 py-2 flex items-center gap-2 cursor-pointer">
+                  <Camera size={13} />
+                  Trocar foto
+                  <input type="file" accept="image/*" onChange={handleAvatarFile} className="hidden" />
+                </label>
+                {profileAvatar && (
+                  <button onClick={() => setProfileAvatar('')} className="btn-ghost text-xs px-3 py-2">
+                    Remover
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs text-white/40 mb-2 flex items-center gap-1.5">
+              <Sparkles size={12} /> Moldura
+            </label>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {FRAME_OPTIONS.map(frame => (
+                <button
+                  key={frame.id}
+                  onClick={() => setProfileFrame(frame.id)}
+                  className={`px-3 py-2 rounded-lg border text-xs font-medium transition-all ${
+                    profileFrame === frame.id
+                      ? 'border-brand-500/60 bg-brand-600/20 text-white'
+                      : 'border-white/10 bg-white/[0.02] text-white/50 hover:text-white/80 hover:bg-white/5'
+                  }`}
+                >
+                  <span className={`inline-block w-3 h-3 rounded-full border mr-2 align-[-2px] ${frame.className}`} />
+                  {frame.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </section>
 
         {/* Library */}
         <section className="card p-5 flex flex-col gap-4">

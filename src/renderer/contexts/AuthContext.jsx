@@ -11,11 +11,12 @@ import {
 } from 'firebase/auth'
 import {
   doc, collection, getDocs, setDoc, deleteDoc,
-  writeBatch, serverTimestamp,
+  writeBatch, serverTimestamp, getDoc,
 } from 'firebase/firestore'
 import { auth, db, trackCloudId, playlistCloudId } from '../firebase'
 
 const AuthContext = createContext(null)
+const DEFAULT_PROFILE = { displayName: '', avatarDataUrl: '', frame: 'classic' }
 
 export function useAuth() {
   return useContext(AuthContext)
@@ -61,6 +62,7 @@ function publicMediaUrl(src) {
 
 export function AuthProvider({ children }) {
   const [user,       setUser]       = useState(undefined) // undefined = loading
+  const [accountProfile, setAccountProfile] = useState(DEFAULT_PROFILE)
   const [syncStatus, setSyncStatus] = useState({ uploading: false, downloading: false, error: null, lastSync: null })
 
   // ── Auth state listener ────────────────────────────────────────────────────
@@ -68,6 +70,31 @@ export function AuthProvider({ children }) {
     const unsub = onAuthStateChanged(auth, u => setUser(u ?? null))
     return unsub
   }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadAccountProfile() {
+      const local = await window.electron?.settings?.get?.('accountProfile').catch(() => null)
+      let next = { ...DEFAULT_PROFILE, ...(local || {}) }
+
+      if (user) {
+        if (!next.displayName) next.displayName = user.displayName || ''
+        if (!next.avatarDataUrl && user.photoURL?.startsWith('data:image/')) next.avatarDataUrl = user.photoURL
+
+        try {
+          const snap = await getDoc(doc(db, 'users', user.uid, 'profile', 'customization'))
+          if (snap.exists()) next = { ...next, ...snap.data() }
+        } catch (e) {
+          console.warn('[Profile] Cloud profile unavailable:', e)
+        }
+      }
+
+      if (!cancelled) setAccountProfile(next)
+    }
+
+    loadAccountProfile()
+    return () => { cancelled = true }
+  }, [user])
 
   // ── Auth actions ───────────────────────────────────────────────────────────
   async function login(email, password) {
@@ -90,6 +117,29 @@ export function AuthProvider({ children }) {
 
   async function sendPasswordReset(email) {
     await sendPasswordResetEmail(auth, email)
+  }
+
+  async function updateAccountProfile(profile) {
+    const next = {
+      displayName: (profile.displayName || '').trim(),
+      avatarDataUrl: profile.avatarDataUrl || '',
+      frame: profile.frame || 'classic',
+    }
+
+    await window.electron?.settings?.set?.('accountProfile', next)
+    setAccountProfile(next)
+
+    if (auth.currentUser) {
+      await updateProfile(auth.currentUser, {
+        displayName: next.displayName || auth.currentUser.displayName || '',
+      })
+      await setDoc(doc(db, 'users', auth.currentUser.uid, 'profile', 'customization'), {
+        ...next,
+        updatedAt: serverTimestamp(),
+      }, { merge: true })
+    }
+
+    return next
   }
 
   // ── Upload local → cloud ──────────────────────────────────────────────────
@@ -180,11 +230,14 @@ export function AuthProvider({ children }) {
         }
 
         const communityRef = doc(db, 'communityPlaylists', plId)
+        const ownerName = accountProfile.displayName || user.displayName || user.email?.split('@')[0] || 'Ouvinte NianPlay'
         communityOps.push(batch => batch.set(communityRef, {
           name:           pl.name           || '',
           cover_url:      publicMediaUrl(pl.cover_url),
           owner_uid:      user.uid,
-          owner_name:     user.displayName || user.email?.split('@')[0] || 'Ouvinte NianPlay',
+          owner_name:     ownerName,
+          owner_avatar:   accountProfile.avatarDataUrl || '',
+          owner_frame:    accountProfile.frame || 'classic',
           groups_enabled: pl.groups_enabled || false,
           trackCount:     communityTracks.length,
           updatedAt:      serverTimestamp(),
@@ -210,7 +263,7 @@ export function AuthProvider({ children }) {
       console.error('[Sync] Upload failed:', e)
       setSyncStatus(s => ({ ...s, uploading: false, error: e.message }))
     }
-  }, [user])
+  }, [user, accountProfile])
 
   // ── Download cloud → local ─────────────────────────────────────────────────
   const syncFromCloud = useCallback(async () => {
@@ -328,7 +381,19 @@ export function AuthProvider({ children }) {
     }
   }, [user])
 
-  const value = { user, syncStatus, login, register, logout, loginWithGoogle, sendPasswordReset, syncToCloud, syncFromCloud }
+  const value = {
+    user,
+    accountProfile,
+    syncStatus,
+    login,
+    register,
+    logout,
+    loginWithGoogle,
+    sendPasswordReset,
+    updateAccountProfile,
+    syncToCloud,
+    syncFromCloud,
+  }
 
   return (
     <AuthContext.Provider value={value}>

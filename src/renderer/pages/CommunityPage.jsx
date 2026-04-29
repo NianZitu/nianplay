@@ -10,6 +10,13 @@ function coverSrc(src) {
   return `file://${src}`
 }
 
+const FRAME_CLASS = {
+  classic: 'border-brand-500/50 bg-brand-600/30',
+  neon: 'border-cyan-300 bg-cyan-400/20 shadow-[0_0_12px_rgba(34,211,238,0.35)]',
+  sunset: 'border-rose-300 bg-amber-400/20 shadow-[0_0_12px_rgba(251,113,133,0.35)]',
+  mint: 'border-emerald-300 bg-emerald-400/20 shadow-[0_0_12px_rgba(52,211,153,0.28)]',
+}
+
 export default function CommunityPage() {
   const { user } = useAuth() || {}
   const [playlists, setPlaylists] = useState([])
@@ -135,7 +142,18 @@ export default function CommunityPage() {
                 </div>
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-white truncate">{p.name}</p>
-                  <p className="text-xs text-white/35 truncate">por {p.owner_name || 'Ouvinte NianPlay'}</p>
+                  <div className="flex items-center gap-1.5 mt-1 min-w-0">
+                    <div className={`w-5 h-5 rounded-full p-0.5 border shrink-0 ${FRAME_CLASS[p.owner_frame] || FRAME_CLASS.classic}`}>
+                      <div className="w-full h-full rounded-full overflow-hidden bg-surface-700 flex items-center justify-center">
+                        {p.owner_avatar ? (
+                          <img src={p.owner_avatar} alt={p.owner_name || 'Criador'} className="w-full h-full object-cover" />
+                        ) : (
+                          <Users size={9} className="text-white/35" />
+                        )}
+                      </div>
+                    </div>
+                    <p className="text-xs text-white/35 truncate">por {p.owner_name || 'Ouvinte NianPlay'}</p>
+                  </div>
                   <p className="text-xs text-white/25 mt-1">{p.trackCount ?? p.tracks?.length ?? 0} faixas</p>
                 </div>
                 <button
