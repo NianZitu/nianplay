@@ -24,6 +24,22 @@ const WALLPAPER_MODES = [
   { id: 'transparent', label: 'Transparente' },
 ]
 
+function parseReleaseNotes(notes) {
+  if (!notes) return []
+  const raw = Array.isArray(notes)
+    ? notes.map(n => n.note || n.version || '').join('\n')
+    : String(notes)
+
+  return raw
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/li>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .split('\n')
+    .map(line => line.replace(/^[-*•]\s*/, '').trim())
+    .filter(Boolean)
+    .slice(0, 8)
+}
+
 function frameClass(frame) {
   return FRAME_OPTIONS.find(f => f.id === frame)?.className || FRAME_OPTIONS[0].className
 }
@@ -219,6 +235,7 @@ export default function SettingsPage() {
   }
 
   const showDpapiWarning = cookieBrowser === 'edge' || cookieBrowser === 'chrome'
+  const updateNotes = parseReleaseNotes(updateInfo?.notes)
 
   return (
     <div className="h-full overflow-y-auto p-6">
@@ -527,6 +544,22 @@ export default function SettingsPage() {
             <p className={`text-xs ${updatePhase === 'error' ? 'text-red-400' : updatePhase === 'downloaded' ? 'text-green-400' : 'text-white/45'}`}>
               {updateMessage}
             </p>
+          )}
+
+          {updateNotes.length > 0 && (
+            <div className="rounded-lg border border-white/10 bg-surface-700/35 px-3 py-2">
+              <p className="text-[11px] uppercase tracking-wide text-white/30 mb-1">
+                O que mudou na versão {updateInfo?.version}
+              </p>
+              <ul className="space-y-1">
+                {updateNotes.map((note, i) => (
+                  <li key={i} className="text-xs text-white/60 flex gap-2">
+                    <span className="text-brand-400">•</span>
+                    <span>{note}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
 
           {updatePhase === 'downloading' && (

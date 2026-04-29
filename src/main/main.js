@@ -6,6 +6,7 @@ const isDev = process.env.NODE_ENV === 'development'
 
 let mainWindow
 let staticServer
+const STATIC_PORT = 17654
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -49,7 +50,7 @@ function startStaticServer() {
 
   return new Promise((resolve, reject) => {
     staticServer.once('error', reject)
-    staticServer.listen(0, 'localhost', () => {
+    staticServer.listen(STATIC_PORT, 'localhost', () => {
       const address = staticServer.address()
       resolve(`http://localhost:${address.port}`)
     })
