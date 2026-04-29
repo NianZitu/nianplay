@@ -1,11 +1,62 @@
 const { app, BrowserWindow, ipcMain } = require('electron')
 const path = require('path')
-const fs   = require('path')
+const fs   = require('fs')
+const http = require('http')
 const isDev = process.env.NODE_ENV === 'development'
 
 let mainWindow
+let staticServer
 
-function createWindow() {
+const MIME_TYPES = {
+  '.html': 'text/html; charset=utf-8',
+  '.js':   'text/javascript; charset=utf-8',
+  '.css':  'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.png':  'image/png',
+  '.jpg':  'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.svg':  'image/svg+xml',
+  '.ico':  'image/x-icon',
+  '.webp': 'image/webp',
+}
+
+function startStaticServer() {
+  if (staticServer) {
+    const address = staticServer.address()
+    return Promise.resolve(`http://localhost:${address.port}`)
+  }
+
+  const distDir = path.join(__dirname, '../../dist')
+  staticServer = http.createServer((req, res) => {
+    const urlPath = decodeURIComponent((req.url || '/').split('?')[0])
+    const safePath = path.normalize(urlPath).replace(/^(\.\.[/\\])+/, '')
+    let filePath = path.join(distDir, safePath === '/' ? 'index.html' : safePath)
+
+    if (!filePath.startsWith(distDir)) {
+      res.writeHead(403)
+      res.end('Forbidden')
+      return
+    }
+
+    if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
+      filePath = path.join(distDir, 'index.html')
+    }
+
+    const ext = path.extname(filePath).toLowerCase()
+    res.writeHead(200, { 'Content-Type': MIME_TYPES[ext] || 'application/octet-stream' })
+    fs.createReadStream(filePath).pipe(res)
+  })
+
+  return new Promise((resolve, reject) => {
+    staticServer.once('error', reject)
+    staticServer.listen(0, 'localhost', () => {
+      const address = staticServer.address()
+      resolve(`http://localhost:${address.port}`)
+    })
+  })
+}
+
+async function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
@@ -27,7 +78,8 @@ function createWindow() {
     mainWindow.loadURL('http://localhost:5173')
     mainWindow.webContents.openDevTools()
   } else {
-    mainWindow.loadFile(path.join(__dirname, '../../dist/index.html'))
+    const appUrl = await startStaticServer()
+    mainWindow.loadURL(appUrl)
   }
 
   mainWindow.on('closed', () => { mainWindow = null })
@@ -80,7 +132,7 @@ async function ensureYtDlp() {
 }
 
 app.whenReady().then(async () => {
-  createWindow()
+  await createWindow()
 
   ipcMain.handle('app:getVersion', () => app.getVersion())
 
@@ -107,5 +159,9 @@ app.whenReady().then(async () => {
 })
 
 app.on('window-all-closed', () => {
+  if (staticServer) {
+    staticServer.close()
+    staticServer = null
+  }
   if (process.platform !== 'darwin') app.quit()
 })
