@@ -1,5 +1,5 @@
 import { initializeApp }                                       from 'firebase/app'
-import { initializeAuth, indexedDBLocalPersistence }           from 'firebase/auth'
+import { initializeAuth, indexedDBLocalPersistence, browserPopupRedirectResolver } from 'firebase/auth'
 import { getFirestore }                                         from 'firebase/firestore'
 
 // ─── CONFIGURAÇÃO FIREBASE ───────────────────────────────────────────────────
@@ -31,6 +31,7 @@ const firebaseApp = initializeApp(firebaseConfig)
 // indexedDBLocalPersistence é necessário no Electron (contextIsolation bloqueia localStorage)
 export const auth = initializeAuth(firebaseApp, {
   persistence: indexedDBLocalPersistence,
+  popupRedirectResolver: browserPopupRedirectResolver,
 })
 export const db = getFirestore(firebaseApp)
 

@@ -63,7 +63,7 @@ function UrlTab({ ytdlpReady, sharedOutputDir, onOutputDirChange }) {
       <div className="flex gap-2">
         <input
           type="url"
-          placeholder="Cole um link do YouTube ou playlist..."
+          placeholder="Cole um link do YouTube, playlist ou video..."
           value={url}
           onChange={e => setUrl(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && handleDownload()}
@@ -142,6 +142,127 @@ function UrlTab({ ytdlpReady, sharedOutputDir, onOutputDirChange }) {
 }
 
 // ── Tab: YouTube Search ────────────────────────────────────────────────────────
+function ReelsTab({ ytdlpReady, outputDir, onOutputDirChange }) {
+  const [url,     setUrl]     = useState('')
+  const [quality, setQuality] = useState('1080p')
+  const [error,   setError]   = useState('')
+  const isElectron = !!window.electron
+
+  function isReelUrl(value) {
+    try {
+      const parsed = new URL(value)
+      const host = parsed.hostname.toLowerCase()
+      const pathName = parsed.pathname.toLowerCase()
+      return (
+        (host.includes('instagram.com') && (pathName.includes('/reel/') || pathName.includes('/reels/'))) ||
+        (host.includes('facebook.com') && pathName.includes('/reel/'))
+      )
+    } catch {
+      return false
+    }
+  }
+
+  async function handleChooseDir() {
+    if (!isElectron) return
+    const dir = await window.electron.dialog.openFolder()
+    if (dir) {
+      onOutputDirChange(dir)
+      window.electron.settings.set('downloadPath', dir)
+    }
+  }
+
+  async function handleDownload() {
+    const cleanUrl = url.trim()
+    if (!cleanUrl) return
+    setError('')
+    if (!isReelUrl(cleanUrl)) {
+      setError('Cole um link de Reel do Instagram ou Facebook.')
+      return
+    }
+
+    const result = await window.electron.downloader.start({
+      url: cleanUrl,
+      format: 'video',
+      quality,
+      source: 'reel',
+      outputDir: outputDir || undefined,
+    })
+    if (result?.error) { setError(result.error); return }
+    setUrl('')
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      {error && (
+        <div className="flex items-center gap-3 bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3 text-sm text-red-300">
+          <AlertTriangle size={15} className="shrink-0" />
+          <span className="flex-1">{error}</span>
+          <button onClick={() => setError('')}><X size={14} /></button>
+        </div>
+      )}
+
+      <div className="flex gap-2">
+        <input
+          type="url"
+          placeholder="Cole um link de Reel do Instagram ou Facebook..."
+          value={url}
+          onChange={e => setUrl(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && handleDownload()}
+          className="input-base flex-1 text-sm"
+        />
+        <button
+          onClick={handleDownload}
+          disabled={!url.trim() || ytdlpReady === false}
+          className="btn-primary flex items-center gap-2 whitespace-nowrap"
+        >
+          {ytdlpReady === false
+            ? <><Loader2 size={14} className="animate-spin" /> Aguardando...</>
+            : <><Video size={14} /> Baixar Reel</>
+          }
+        </button>
+      </div>
+
+      <div className="flex flex-wrap gap-4 items-end">
+        <div>
+          <label className="text-xs text-white/40 mb-1.5 block">Formato</label>
+          <div className="flex items-center gap-2 rounded-lg border border-white/10 px-4 py-2 text-sm text-white/70 bg-white/[0.02]">
+            <Video size={13} className="text-brand-400" /> Video
+          </div>
+        </div>
+
+        <div>
+          <label className="text-xs text-white/40 mb-1.5 block">Qualidade</label>
+          <div className="flex rounded-lg overflow-hidden border border-white/10">
+            {['1080p', '720p', '480p', '360p'].map(q => (
+              <button key={q} onClick={() => setQuality(q)}
+                className={`px-3 py-2 text-sm transition-colors
+                  ${quality === q ? 'bg-brand-600 text-white' : 'text-white/50 hover:text-white hover:bg-white/5'}`}>
+                {q}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex-1">
+          <label className="text-xs text-white/40 mb-1.5 block">Pasta de destino</label>
+          <div className="flex gap-2">
+            <input type="text" readOnly placeholder="Padrao: Downloads do sistema"
+              value={outputDir} onClick={handleChooseDir}
+              className="input-base flex-1 text-sm cursor-pointer" />
+            <button onClick={handleChooseDir} className="btn-ghost p-2">
+              <FolderOpen size={16} />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <p className="text-xs text-white/30">
+        Reels sao baixados somente como video. Perfis privados podem exigir cookies configurados nas Configuracoes.
+      </p>
+    </div>
+  )
+}
+
 function YtSearchTab({ ytdlpReady, outputDir }) {
   const [query,    setQuery]    = useState('')
   const [results,  setResults]  = useState([])
@@ -529,6 +650,7 @@ export default function DownloadsPage() {
 
   const TABS = [
     { id: 'url',      label: 'Link / URL' },
+    { id: 'reels',    label: 'Reels' },
     { id: 'ytsearch', label: 'Busca YouTube' },
     { id: 'spotify',  label: 'Spotify' },
   ]
@@ -568,6 +690,7 @@ export default function DownloadsPage() {
         </div>
 
         {activeTab === 'url'      && <UrlTab      ytdlpReady={ytdlpReady} sharedOutputDir={outputDir} onOutputDirChange={setOutputDir} />}
+        {activeTab === 'reels'    && <ReelsTab    ytdlpReady={ytdlpReady} outputDir={outputDir} onOutputDirChange={setOutputDir} />}
         {activeTab === 'ytsearch' && <YtSearchTab ytdlpReady={ytdlpReady} outputDir={outputDir} />}
         {activeTab === 'spotify'  && <SpotifyTab  ytdlpReady={ytdlpReady} outputDir={outputDir} />}
       </div>

@@ -38,6 +38,7 @@ export default function LoginModal({ onClose }) {
       'auth/invalid-credential':       'E-mail ou senha incorretos.',
       'auth/operation-not-allowed':    'Este método de login não está ativado. Verifique Firebase Console → Authentication → Sign-in method.',
       'auth/configuration-not-found':  'Firebase não configurado corretamente.',
+      'auth/argument-error':           'Login com Google não conseguiu abrir corretamente. Atualize o app e tente novamente.',
       'auth/popup-closed-by-user':     'Login com Google cancelado.',
       'auth/cancelled-popup-request':  'Login com Google cancelado.',
       'auth/popup-blocked':            'Popup bloqueado. Tente novamente.',
