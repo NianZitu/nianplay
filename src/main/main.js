@@ -95,6 +95,7 @@ app.whenReady().then(async () => {
   require('./handlers/ytSearch')(ipcMain)
   require('./handlers/lufs')(ipcMain, mainWindow)
   require('./handlers/lyrics')(ipcMain)
+  require('./handlers/appearance')(ipcMain)
   require('./handlers/updater')(ipcMain, mainWindow)
 
   // Download yt-dlp in background (non-blocking)

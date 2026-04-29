@@ -104,6 +104,12 @@ contextBridge.exposeInMainWorld('electron', {
     getAll: ()           => ipcRenderer.invoke('settings:getAll'),
   },
 
+  // Appearance
+  appearance: {
+    chooseWallpaper: (kind)      => ipcRenderer.invoke('appearance:chooseWallpaper', kind),
+    setWallpaper:    (wallpaper) => ipcRenderer.invoke('appearance:setWallpaper', wallpaper),
+  },
+
   // Dialog
   dialog: {
     openFolder: () => ipcRenderer.invoke('dialog:openFolder'),
