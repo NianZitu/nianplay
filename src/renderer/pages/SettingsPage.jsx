@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Save, FolderOpen, Info, Cookie, AlertTriangle, CheckCircle, Youtube, RefreshCw, Download, CheckCircle2, Loader2, Camera, UserRound, Sparkles } from 'lucide-react'
+import { Save, FolderOpen, Info, Cookie, AlertTriangle, CheckCircle, Youtube, RefreshCw, Download, CheckCircle2, Loader2, Camera, UserRound, Sparkles, Image, Video, Ban } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 
 const BROWSERS = [
@@ -16,6 +16,12 @@ const FRAME_OPTIONS = [
   { id: 'neon', label: 'Neon', className: 'border-cyan-300 bg-cyan-400/20 shadow-[0_0_16px_rgba(34,211,238,0.35)]' },
   { id: 'sunset', label: 'Sunset', className: 'border-rose-300 bg-amber-400/20 shadow-[0_0_16px_rgba(251,113,133,0.35)]' },
   { id: 'mint', label: 'Mint', className: 'border-emerald-300 bg-emerald-400/20 shadow-[0_0_16px_rgba(52,211,153,0.28)]' },
+]
+
+const WALLPAPER_MODES = [
+  { id: 'normal', label: 'Normal' },
+  { id: 'blur', label: 'Borrado' },
+  { id: 'transparent', label: 'Transparente' },
 ]
 
 function frameClass(frame) {
@@ -47,6 +53,15 @@ function resizeImage(file) {
   })
 }
 
+function readFileDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onerror = reject
+    reader.onload = () => resolve(reader.result)
+    reader.readAsDataURL(file)
+  })
+}
+
 export default function SettingsPage() {
   const { user, accountProfile, updateAccountProfile } = useAuth() || {}
   const [libraryPath,   setLibraryPath]   = useState('')
@@ -65,6 +80,9 @@ export default function SettingsPage() {
   const [profileName,         setProfileName]         = useState('')
   const [profileAvatar,       setProfileAvatar]       = useState('')
   const [profileFrame,        setProfileFrame]        = useState('classic')
+  const [wallpaperSrc,        setWallpaperSrc]        = useState('')
+  const [wallpaperType,       setWallpaperType]       = useState('')
+  const [wallpaperMode,       setWallpaperMode]       = useState('normal')
   const [saved,         setSaved]         = useState(false)
 
   const isElectron = !!window.electron
@@ -80,6 +98,9 @@ export default function SettingsPage() {
       setYoutubeClientId(all.youtubeClientId || '')
       setYoutubeClientSecret(all.youtubeClientSecret || '')
       setYoutubeRefreshToken(all.youtubeRefreshToken || '')
+      setWallpaperSrc(all.accountWallpaper?.src || '')
+      setWallpaperType(all.accountWallpaper?.type || '')
+      setWallpaperMode(all.accountWallpaper?.mode || 'normal')
     })
     window.electron.app?.getVersion?.().then(setAppVersion).catch(() => {})
   }, [])
@@ -150,6 +171,11 @@ export default function SettingsPage() {
       avatarDataUrl: profileAvatar,
       frame: profileFrame,
     })
+    const wallpaper = wallpaperSrc
+      ? { src: wallpaperSrc, type: wallpaperType || 'image', mode: wallpaperMode || 'normal' }
+      : null
+    await window.electron.settings.set('accountWallpaper', wallpaper)
+    window.dispatchEvent(new CustomEvent('nianplay:wallpaper-updated', { detail: wallpaper }))
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
   }
@@ -159,6 +185,17 @@ export default function SettingsPage() {
     if (!file) return
     const dataUrl = await resizeImage(file)
     setProfileAvatar(dataUrl)
+    e.target.value = ''
+  }
+
+  async function handleWallpaperFile(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    const isVideo = file.type.startsWith('video/')
+    const src = isVideo ? await readFileDataUrl(file) : await resizeImage(file)
+    setWallpaperSrc(src)
+    setWallpaperType(isVideo ? 'video' : 'image')
     e.target.value = ''
   }
 
@@ -250,6 +287,65 @@ export default function SettingsPage() {
                 >
                   <span className={`inline-block w-3 h-3 rounded-full border mr-2 align-[-2px] ${frame.className}`} />
                   {frame.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="border-t border-white/5 pt-4 flex flex-col gap-3">
+            <label className="text-xs text-white/40 flex items-center gap-1.5">
+              <Image size={12} /> Wallpaper
+            </label>
+
+            <div className="aspect-video rounded-lg overflow-hidden bg-surface-700 border border-white/10">
+              {wallpaperSrc ? (
+                wallpaperType === 'video' ? (
+                  <video src={wallpaperSrc} className={`w-full h-full object-cover ${wallpaperMode === 'blur' ? 'blur-sm scale-105' : ''} ${wallpaperMode === 'transparent' ? 'opacity-45' : ''}`} muted loop autoPlay playsInline />
+                ) : (
+                  <img src={wallpaperSrc} alt="Wallpaper" className={`w-full h-full object-cover ${wallpaperMode === 'blur' ? 'blur-sm scale-105' : ''} ${wallpaperMode === 'transparent' ? 'opacity-45' : ''}`} />
+                )
+              ) : (
+                <div className="w-full h-full flex flex-col items-center justify-center text-white/25 gap-2">
+                  <Image size={28} strokeWidth={1.2} />
+                  <span className="text-xs">Nenhum wallpaper selecionado</span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <label className="btn-ghost text-xs px-3 py-2 flex items-center gap-2 cursor-pointer">
+                <Image size={13} />
+                Foto
+                <input type="file" accept="image/*" onChange={handleWallpaperFile} className="hidden" />
+              </label>
+              <label className="btn-ghost text-xs px-3 py-2 flex items-center gap-2 cursor-pointer">
+                <Video size={13} />
+                Video
+                <input type="file" accept="video/*" onChange={handleWallpaperFile} className="hidden" />
+              </label>
+              {wallpaperSrc && (
+                <button
+                  onClick={() => { setWallpaperSrc(''); setWallpaperType(''); setWallpaperMode('normal') }}
+                  className="btn-ghost text-xs px-3 py-2 flex items-center gap-2"
+                >
+                  <Ban size={13} />
+                  Remover
+                </button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              {WALLPAPER_MODES.map(mode => (
+                <button
+                  key={mode.id}
+                  onClick={() => setWallpaperMode(mode.id)}
+                  className={`px-3 py-2 rounded-lg border text-xs font-medium transition-all ${
+                    wallpaperMode === mode.id
+                      ? 'border-brand-500/60 bg-brand-600/20 text-white'
+                      : 'border-white/10 bg-white/[0.02] text-white/50 hover:text-white/80 hover:bg-white/5'
+                  }`}
+                >
+                  {mode.label}
                 </button>
               ))}
             </div>

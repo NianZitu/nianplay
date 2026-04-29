@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import TitleBar           from './components/TitleBar'
 import Sidebar            from './components/Sidebar'
 import PlayerBar          from './components/PlayerBar'
@@ -13,10 +13,51 @@ import CommunityPage      from './pages/CommunityPage'
 import { PlayerProvider } from './store/PlayerContext'
 import { AuthProvider }   from './contexts/AuthContext'
 
+function WallpaperLayer({ wallpaper }) {
+  if (!wallpaper?.src) return null
+
+  const isVideo = wallpaper.type === 'video'
+  const mode = wallpaper.mode || 'normal'
+  const mediaClass = `absolute inset-0 w-full h-full object-cover ${mode === 'blur' ? 'scale-105 blur-md' : ''} ${mode === 'transparent' ? 'opacity-35' : 'opacity-80'}`
+  const overlayClass = mode === 'transparent'
+    ? 'bg-surface-900/70'
+    : mode === 'blur'
+      ? 'bg-surface-900/45'
+      : 'bg-surface-900/25'
+
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      {isVideo ? (
+        <video src={wallpaper.src} className={mediaClass} autoPlay muted loop playsInline />
+      ) : (
+        <img src={wallpaper.src} className={mediaClass} alt="" />
+      )}
+      <div className={`absolute inset-0 ${overlayClass}`} />
+    </div>
+  )
+}
+
 export default function App() {
   const [activePage,     setActivePage]     = useState('library')
   const [openedPlaylist, setOpenedPlaylist] = useState(null)
   const [showNowPlaying, setShowNowPlaying] = useState(false)
+  const [wallpaper,      setWallpaper]      = useState(null)
+
+  useEffect(() => {
+    let alive = true
+    async function loadWallpaper() {
+      const next = await window.electron?.settings?.get?.('accountWallpaper').catch(() => null)
+      if (alive) setWallpaper(next)
+    }
+
+    loadWallpaper()
+    const handler = event => setWallpaper(event.detail || null)
+    window.addEventListener('nianplay:wallpaper-updated', handler)
+    return () => {
+      alive = false
+      window.removeEventListener('nianplay:wallpaper-updated', handler)
+    }
+  }, [])
 
   function handleOpenPlaylist(playlist) {
     setOpenedPlaylist(playlist)
@@ -46,17 +87,20 @@ export default function App() {
   return (
     <AuthProvider>
       <PlayerProvider>
-        <div className="flex flex-col h-screen w-screen overflow-hidden bg-surface-900">
-          <TitleBar />
-          <UpdateBanner />
-          <div className="flex flex-1 overflow-hidden">
-            <Sidebar activePage={activePage} onNavigate={setActivePage} />
-            <main className="flex-1 overflow-hidden">
-              {renderPage()}
-            </main>
+        <div className="relative flex flex-col h-screen w-screen overflow-hidden bg-surface-900">
+          <WallpaperLayer wallpaper={wallpaper} />
+          <div className="relative z-10 flex flex-col h-full min-h-0">
+            <TitleBar />
+            <UpdateBanner />
+            <div className="flex flex-1 overflow-hidden">
+              <Sidebar activePage={activePage} onNavigate={setActivePage} />
+              <main className="flex-1 overflow-hidden">
+                {renderPage()}
+              </main>
+            </div>
+            <PlayerBar onOpenNowPlaying={() => setShowNowPlaying(true)} />
+            {showNowPlaying && <NowPlayingModal onClose={() => setShowNowPlaying(false)} />}
           </div>
-          <PlayerBar onOpenNowPlaying={() => setShowNowPlaying(true)} />
-          {showNowPlaying && <NowPlayingModal onClose={() => setShowNowPlaying(false)} />}
         </div>
       </PlayerProvider>
     </AuthProvider>
