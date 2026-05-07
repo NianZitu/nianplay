@@ -41,7 +41,7 @@ export default function Sidebar({ activePage, onNavigate }) {
 
   return (
     <>
-      <aside className="w-56 m-3 mr-0 rounded-2xl flex flex-col bg-surface-800/90 border border-white/10 shrink-0 overflow-hidden backdrop-blur-md">
+      <aside className="relative z-50 w-56 m-3 mr-0 rounded-2xl flex flex-col bg-surface-800/90 border border-white/10 shrink-0 overflow-hidden backdrop-blur-md">
         <nav className="flex flex-col gap-1 p-3 flex-1">
           {NAV.map(({ id, label, icon: Icon }) => {
             const active = effectivePage === id
@@ -89,7 +89,7 @@ export default function Sidebar({ activePage, onNavigate }) {
               </button>
 
               {syncMenu && (
-                <div className="absolute bottom-full left-0 right-0 mb-1 bg-surface-700 border border-white/10 rounded-xl shadow-xl overflow-hidden z-50">
+                <div className="absolute bottom-full left-0 right-0 mb-1 bg-surface-700 border border-white/10 rounded-xl shadow-xl overflow-hidden z-[80]">
                   <button
                     onClick={() => { syncToCloud?.(); setSyncMenu(false) }}
                     disabled={isSyncing}
@@ -144,7 +144,7 @@ export default function Sidebar({ activePage, onNavigate }) {
       </aside>
 
       {showLogin && <LoginModal onClose={() => setShowLogin(false)} />}
-      {syncMenu && <div className="fixed inset-0 z-40" onClick={() => setSyncMenu(false)} />}
+      {syncMenu && <div className="fixed inset-0 z-30" onClick={() => setSyncMenu(false)} />}
     </>
   )
 }
