@@ -60,6 +60,43 @@ function publicMediaUrl(src) {
   return /^https?:\/\//.test(src) ? src : ''
 }
 
+function trackKey(track) {
+  return `${(track.title || '').toLowerCase().trim()}|${(track.artist || '').toLowerCase().trim()}|${Math.round(track.duration || 0)}`
+}
+
+function findTrackMatch(tracks, target) {
+  if (!target) return null
+  if (target.yt_url) {
+    const byUrl = tracks.find(t => t.yt_url && t.yt_url === target.yt_url)
+    if (byUrl) return byUrl
+  }
+
+  const duration = Math.round(target.duration || 0)
+  const title = (target.title || '').toLowerCase().trim()
+  const artist = (target.artist || '').toLowerCase().trim()
+  const album = (target.album || '').toLowerCase().trim()
+
+  let matches = tracks.filter(t =>
+    (t.title || '').toLowerCase().trim() === title &&
+    (t.artist || '').toLowerCase().trim() === artist &&
+    Math.abs(Math.round(t.duration || 0) - duration) <= 2
+  )
+  if (matches.length === 1) return matches[0]
+
+  matches = tracks.filter(t =>
+    (t.title || '').toLowerCase().trim() === title &&
+    (t.artist || '').toLowerCase().trim() === artist &&
+    (t.album || '').toLowerCase().trim() === album
+  )
+  if (matches.length === 1) return matches[0]
+
+  matches = tracks.filter(t =>
+    (t.title || '').toLowerCase().trim() === title &&
+    (t.artist || '').toLowerCase().trim() === artist
+  )
+  return matches.length === 1 ? matches[0] : null
+}
+
 export function AuthProvider({ children }) {
   const [user,       setUser]       = useState(undefined) // undefined = loading
   const [accountProfile, setAccountProfile] = useState(DEFAULT_PROFILE)
@@ -208,8 +245,15 @@ export function AuthProvider({ children }) {
           const ptRef = doc(db, 'users', user.uid, 'playlists', plId, 'tracks', tId)
           const grp   = t.group_id ? groupById[t.group_id] : null
           ops.push(batch => batch.set(ptRef, {
+            track_cloud_id:  tId,
             title:          t.title  || '',
             artist:         t.artist || '',
+            album:          t.album || '',
+            duration:       t.duration || 0,
+            yt_url:         t.yt_url || '',
+            cover_url:      publicMediaUrl(t.cover_url || t.cover_path),
+            lyrics:         t.lyrics || '',
+            gain:           t.gain || 0,
             position:       t.position     || 0,
             group_name:     grp?.name      || null,
             group_position: grp ? (t.group_position ?? 0) : null,
@@ -271,11 +315,8 @@ export function AuthProvider({ children }) {
     setSyncStatus(s => ({ ...s, downloading: true, error: null }))
     try {
       const localTracks = await window.electron.library.getTracks()
-      // Prefer yt_url match (most reliable); fall back to title+artist
       const localUrlSet  = new Set((localTracks || []).filter(t => t.yt_url).map(t => t.yt_url))
-      const localMetaSet = new Set((localTracks || []).map(t =>
-        `${(t.title || '').toLowerCase()}|${(t.artist || '').toLowerCase()}`
-      ))
+      const localMetaSet = new Set((localTracks || []).map(trackKey))
 
       // Fetch cloud tracks
       const tracksSnap = await getDocs(collection(db, 'users', user.uid, 'tracks'))
@@ -283,7 +324,7 @@ export function AuthProvider({ children }) {
       tracksSnap.forEach(d => {
         const t   = d.data()
         if (t.yt_url && localUrlSet.has(t.yt_url)) return   // already exists by URL
-        const key = `${(t.title || '').toLowerCase()}|${(t.artist || '').toLowerCase()}`
+        const key = trackKey(t)
         if (localMetaSet.has(key)) return                    // already exists by meta
         newTracks.push(t)
       })
@@ -323,19 +364,32 @@ export function AuthProvider({ children }) {
         // Fetch playlist tracks from cloud and add missing ones
         const ptSnap        = await getDocs(collection(db, 'users', user.uid, 'playlists', plDoc.id, 'tracks'))
         const localPlTracks = await window.electron.playlists.getTracks(localPl.id)
-        const localPtKeys   = new Set((localPlTracks || []).map(t =>
-          `${(t.title || '').toLowerCase()}|${(t.artist || '').toLowerCase()}`
-        ))
+        const localPtKeys   = new Set((localPlTracks || []).map(trackKey))
 
         const allTracks = await window.electron.library.getTracks()
         for (const ptDoc of ptSnap.docs) {
           const pt  = ptDoc.data()
-          const key = `${(pt.title || '').toLowerCase()}|${(pt.artist || '').toLowerCase()}`
+          const key = trackKey(pt)
           if (localPtKeys.has(key)) continue
-          const match = (allTracks || []).find(t =>
-            (t.title || '').toLowerCase()  === (pt.title || '').toLowerCase() &&
-            (t.artist || '').toLowerCase() === (pt.artist || '').toLowerCase()
-          )
+          let match = findTrackMatch(allTracks || [], pt)
+          if (!match) {
+            const imported = await window.electron.library.importVirtualTrack({
+              title:     pt.title    || '',
+              artist:    pt.artist   || '',
+              album:     pt.album    || '',
+              duration:  pt.duration || 0,
+              yt_url:    pt.yt_url   || '',
+              cover_url: pt.cover_url || '',
+              lyrics:    pt.lyrics   || '',
+              gain:      pt.gain     || 0,
+              file_path: '',
+            })
+            if (imported?.id) {
+              const refreshed = await window.electron.library.getTracks()
+              match = refreshed?.find(t => t.id === imported.id)
+              if (match) allTracks.push(match)
+            }
+          }
           if (match) await window.electron.playlists.addTrack(localPl.id, match.id)
         }
 
@@ -363,10 +417,7 @@ export function AuthProvider({ children }) {
             const pt = ptDoc.data()
             if (!pt.group_name || !(pt.group_name in groupNameToId)) continue
             const groupId  = groupNameToId[pt.group_name]
-            const localMatch = freshPlTracks.find(t =>
-              (t.title  || '').toLowerCase() === (pt.title  || '').toLowerCase() &&
-              (t.artist || '').toLowerCase() === (pt.artist || '').toLowerCase()
-            )
+            const localMatch = findTrackMatch(freshPlTracks, pt)
             if (localMatch && !localMatch.group_id) {
               await window.electron.playlists.setTrackGroup(localPl.id, localMatch.id, groupId, pt.group_position ?? 0)
             }

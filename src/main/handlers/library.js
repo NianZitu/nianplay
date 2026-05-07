@@ -5,6 +5,36 @@ const { getDB } = require('../db')
 
 const AUDIO_EXTENSIONS = new Set(['.mp3', '.flac', '.wav', '.aac', '.ogg', '.m4a', '.opus', '.wma'])
 
+function findTrackMatch(tracks, track) {
+  const norm = s => (s || '').toLowerCase().trim()
+  if (track.yt_url) {
+    const byUrl = tracks.find(t => t.yt_url && t.yt_url === track.yt_url)
+    if (byUrl) return byUrl
+  }
+
+  const title = norm(track.title)
+  const artist = norm(track.artist)
+  const album = norm(track.album)
+  const duration = Math.round(track.duration || 0)
+
+  let matches = tracks.filter(t =>
+    norm(t.title) === title &&
+    norm(t.artist) === artist &&
+    Math.abs(Math.round(t.duration || 0) - duration) <= 2
+  )
+  if (matches.length === 1) return matches[0]
+
+  matches = tracks.filter(t =>
+    norm(t.title) === title &&
+    norm(t.artist) === artist &&
+    norm(t.album) === album
+  )
+  if (matches.length === 1) return matches[0]
+
+  matches = tracks.filter(t => norm(t.title) === title && norm(t.artist) === artist)
+  return matches.length === 1 ? matches[0] : null
+}
+
 async function scanDirectory(dirPath) {
   const { parseFile } = await import('music-metadata')
   const db = getDB()
@@ -132,10 +162,8 @@ module.exports = function registerLibraryHandlers(ipcMain) {
       }
     }
 
-    // 2. Fall back to title + artist match
-    const byMeta = tracks.find(t =>
-      norm(t.title) === norm(track.title) && norm(t.artist) === norm(track.artist)
-    )
+    // 2. Fall back only when metadata is specific enough to avoid confusing tracks
+    const byMeta = findTrackMatch(tracks, track)
     if (byMeta) {
       // Merge yt_url if local track is missing it
       let changed = false

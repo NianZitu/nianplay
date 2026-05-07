@@ -195,9 +195,9 @@ export default function LibraryPage() {
   const someChecked = checkedIds.size > 0
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div className="flex flex-col h-full overflow-hidden p-4 gap-3">
       {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-white/5 shrink-0">
+      <div className="flex items-center justify-between px-5 py-4 rounded-2xl wallpaper-panel shrink-0">
         <div>
           <h1 className="text-lg font-semibold text-white">Biblioteca</h1>
           <p className="text-xs text-white/40">{tracks.length} faixas</p>
@@ -264,9 +264,9 @@ export default function LibraryPage() {
           </p>
         </div>
       ) : (
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto rounded-2xl wallpaper-panel">
           {/* Header row */}
-          <div className="grid grid-cols-[2rem_1.5rem_3rem_1fr_1fr_1fr_5rem_2.5rem_2.5rem_2.5rem_2.5rem] gap-3 px-4 py-2 text-xs text-white/30 font-medium uppercase tracking-wider border-b border-white/5 sticky top-0 bg-surface-900">
+          <div className="grid grid-cols-[2rem_1.5rem_3rem_1fr_1fr_1fr_5rem_2.5rem_2.5rem_2.5rem_2.5rem] gap-3 px-4 py-2 text-xs text-white/45 font-medium uppercase tracking-wider border-b border-white/10 sticky top-0 bg-surface-900/85 backdrop-blur-md">
             <span>#</span>
             <button onClick={toggleAll} className="flex items-center justify-center text-white/30 hover:text-white/60">
               {allChecked ? <CheckSquare size={13} className="text-brand-400" /> : <Square size={13} />}
@@ -286,7 +286,7 @@ export default function LibraryPage() {
                 key={track.id}
                 onDoubleClick={() => playFrom(track)}
                 className={`grid grid-cols-[2rem_1.5rem_3rem_1fr_1fr_1fr_5rem_2.5rem_2.5rem_2.5rem_2.5rem] gap-3 items-center px-4 py-2.5 group cursor-pointer transition-colors
-                  ${active ? 'bg-brand-600/10 text-brand-300' : checked ? 'bg-white/5' : 'hover:bg-white/5 text-white/80'}`}
+                  ${active ? 'bg-brand-600/25 text-brand-300' : checked ? 'bg-white/10' : 'wallpaper-row text-white/85'}`}
               >
                 <span className="text-xs text-white/30 group-hover:hidden">{idx + 1}</span>
                 <button

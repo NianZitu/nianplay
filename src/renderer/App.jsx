@@ -87,7 +87,7 @@ export default function App() {
   return (
     <AuthProvider>
       <PlayerProvider>
-        <div className="relative flex flex-col h-screen w-screen overflow-hidden bg-surface-900">
+        <div className={`relative flex flex-col h-screen w-screen overflow-hidden bg-surface-900 ${wallpaper?.src ? 'has-wallpaper' : ''}`}>
           <WallpaperLayer wallpaper={wallpaper} />
           <div className="relative z-10 flex flex-col h-full min-h-0">
             <TitleBar />

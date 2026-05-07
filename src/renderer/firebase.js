@@ -37,7 +37,17 @@ export const db = getFirestore(firebaseApp)
 
 // Deterministic cloud ID from track or playlist fields
 export function trackCloudId(track) {
-  const key = `${(track.title || '').toLowerCase().trim()}|${(track.artist || '').toLowerCase().trim()}`
+  const title = (track.title || '').toLowerCase().trim()
+  const artist = (track.artist || '').toLowerCase().trim()
+  const album = (track.album || '').toLowerCase().trim()
+  const ytUrl = (track.yt_url || '').trim()
+  const duration = Math.round(track.duration || 0)
+  const filePath = (track.file_path || '').toLowerCase().trim()
+  const key = ytUrl
+    ? `yt|${ytUrl}`
+    : filePath
+      ? `file|${filePath}|${duration}`
+      : `meta|${title}|${artist}|${album}|${duration}`
   let h = 5381
   for (let i = 0; i < key.length; i++) h = Math.imul((h << 5) + h, 1) ^ key.charCodeAt(i)
   return `t_${(h >>> 0).toString(36)}`

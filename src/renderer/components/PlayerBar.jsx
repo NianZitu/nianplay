@@ -105,7 +105,7 @@ export default function PlayerBar({ onOpenNowPlaying }) {
   const displayProgress = dragging ? dragProgress : progress
 
   return (
-    <div className="h-20 bg-surface-800/90 border-t border-white/5 backdrop-blur-md flex items-center px-4 gap-4 shrink-0 relative">
+    <div className="h-20 m-3 mt-0 rounded-2xl bg-surface-800/90 border border-white/10 backdrop-blur-md flex items-center px-4 gap-4 shrink-0 relative shadow-xl shadow-black/20">
       {/* Cover + track info */}
       <div className="flex items-center gap-3 w-64 shrink-0">
         <div className="w-12 h-12 rounded-lg overflow-hidden bg-surface-600 shrink-0">

@@ -3,6 +3,36 @@ const { getDB } = require('../db')
 const path = require('path')
 const fs   = require('fs')
 
+function findTrackMatch(tracks, track) {
+  const norm = s => (s || '').toLowerCase().trim()
+  if (track.yt_url) {
+    const byUrl = tracks.find(t => t.yt_url && t.yt_url === track.yt_url)
+    if (byUrl) return byUrl
+  }
+
+  const title = norm(track.title)
+  const artist = norm(track.artist)
+  const album = norm(track.album)
+  const duration = Math.round(track.duration || 0)
+
+  let matches = tracks.filter(t =>
+    norm(t.title) === title &&
+    norm(t.artist) === artist &&
+    Math.abs(Math.round(t.duration || 0) - duration) <= 2
+  )
+  if (matches.length === 1) return matches[0]
+
+  matches = tracks.filter(t =>
+    norm(t.title) === title &&
+    norm(t.artist) === artist &&
+    norm(t.album) === album
+  )
+  if (matches.length === 1) return matches[0]
+
+  matches = tracks.filter(t => norm(t.title) === title && norm(t.artist) === artist)
+  return matches.length === 1 ? matches[0] : null
+}
+
 function importPlaylistData(data, fallbackName = 'Playlist Importada') {
   if (!data || !Array.isArray(data.tracks)) return { error: 'Formato nÃ£o reconhecido' }
 
@@ -31,13 +61,7 @@ function importPlaylistData(data, fallbackName = 'Playlist Importada') {
     const impTitle = norm(imp.title)
     const impArtist = norm(imp.artist)
 
-    let match = imp.yt_url
-      ? allTracks.find(t => t.yt_url && t.yt_url === imp.yt_url)
-      : null
-
-    if (!match) {
-      match = allTracks.find(t => norm(t.title) === impTitle && norm(t.artist) === impArtist)
-    }
+    let match = findTrackMatch(allTracks, imp)
 
     if (!match) {
       match = {
@@ -159,7 +183,7 @@ module.exports = function registerPlaylistHandlers(ipcMain) {
     return pt.map(row => {
       const track = tracks.find(t => t.id === row.track_id)
       if (!track) return null
-      return { ...track, group_id: row.group_id || null, group_position: row.group_position ?? 0 }
+      return { ...track, position: row.position ?? 0, group_id: row.group_id || null, group_position: row.group_position ?? 0 }
     }).filter(Boolean)
   })
 
@@ -404,6 +428,7 @@ module.exports = function registerPlaylistHandlers(ipcMain) {
         genre:          t.genre,
         year:           t.year,
         yt_url:         t.yt_url,
+        cover_url:      t.cover_url || t.cover_path || '',
         lyrics:         t.lyrics,
         gain:           t.gain,
         group_name:     row.group_id ? (groupById[row.group_id]?.name || null) : null,
@@ -520,6 +545,15 @@ module.exports = function registerPlaylistHandlers(ipcMain) {
         )
       }
 
+      const safeMatch = findTrackMatch(allTracks, imp)
+      if (safeMatch) {
+        match = safeMatch
+      } else if (match) {
+        const sameTitle = allTracks.filter(t => norm(t.title) === impTitle)
+        const durationMismatch = imp.duration && Math.abs((match.duration || 0) - imp.duration) > 2
+        if (sameTitle.length > 1 || durationMismatch) match = null
+      }
+
       if (!match) {
         // Create a virtual (metadata-only) track
         match = {
@@ -530,6 +564,7 @@ module.exports = function registerPlaylistHandlers(ipcMain) {
           duration:   imp.duration || 0,
           file_path:  '',
           cover_path: null,
+          cover_url:  imp.cover_url || '',
           genre:      imp.genre    || '',
           year:       imp.year     || null,
           gain:       imp.gain     || 0,

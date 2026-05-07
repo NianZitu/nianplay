@@ -41,7 +41,7 @@ export default function Sidebar({ activePage, onNavigate }) {
 
   return (
     <>
-      <aside className="w-56 flex flex-col bg-surface-800 border-r border-white/5 shrink-0">
+      <aside className="w-56 m-3 mr-0 rounded-2xl flex flex-col bg-surface-800/90 border border-white/10 shrink-0 overflow-hidden backdrop-blur-md">
         <nav className="flex flex-col gap-1 p-3 flex-1">
           {NAV.map(({ id, label, icon: Icon }) => {
             const active = effectivePage === id
