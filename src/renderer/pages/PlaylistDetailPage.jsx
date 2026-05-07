@@ -676,7 +676,7 @@ function GroupFolder({ group, groupTracks, expanded, onToggle, onPlayGroup, onPl
       <div
         onClick={onToggle}
         className={`flex items-center gap-3 pl-4 pr-3 py-2.5 rounded-lg cursor-pointer transition-colors group
-          ${hasActive ? 'bg-brand-600/10' : 'hover:bg-white/5'}`}
+          ${hasActive ? 'bg-brand-600/25 border border-brand-400/20 shadow-sm shadow-black/15' : 'playlist-track-row'}`}
       >
         <div className="w-5 shrink-0 flex items-center justify-center">
           {expanded
@@ -720,9 +720,9 @@ function GroupFolder({ group, groupTracks, expanded, onToggle, onPlayGroup, onPl
                 onDragEnd={handleDragEnd}
                 onDoubleClick={() => onPlay(track)}
                 className={`flex items-center gap-2.5 px-2 py-2 rounded-lg cursor-pointer transition-colors group border
-                  ${active ? 'bg-brand-600/10' : 'hover:bg-white/5'}
+                  ${active ? 'bg-brand-600/25 border-brand-400/20 shadow-sm shadow-black/15' : 'playlist-track-row'}
                   ${isDragging ? 'opacity-40' : ''}
-                  ${isOver ? 'border-brand-400/50 bg-brand-600/5' : 'border-transparent'}`}
+                  ${isOver ? 'border-brand-400/50 bg-brand-600/10' : ''}`}
               >
                 <GripVertical size={12} className="text-white/20 shrink-0 cursor-grab active:cursor-grabbing" />
                 <span className="text-xs text-white/20 w-4 text-center shrink-0 group-hover:hidden">
@@ -1200,7 +1200,7 @@ export default function PlaylistDetailPage({ playlist, onBack }) {
       </div>
 
       {/* Track list */}
-      <div className="flex-1 overflow-y-auto px-6 pb-6">
+      <div className="flex-1 overflow-y-auto mx-6 mb-6 rounded-2xl wallpaper-panel p-2">
         {tracks.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-white/20 gap-3">
             <p className="text-sm">Playlist vazia</p>
@@ -1254,7 +1254,7 @@ export default function PlaylistDetailPage({ playlist, onBack }) {
                           <div
                             onDoubleClick={() => handlePlay(track)}
                             className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors group cursor-pointer
-                              ${active ? 'bg-brand-600/10' : 'hover:bg-white/5'}`}
+                              ${active ? 'bg-brand-600/25 border border-brand-400/20 shadow-sm shadow-black/15' : 'playlist-track-row'}`}
                           >
                             <div className="w-5 shrink-0 flex items-center justify-center">
                               <span className={`text-xs text-white/20 group-hover:hidden ${active ? 'hidden' : ''}`}>{i + 1}</span>
@@ -1326,7 +1326,7 @@ export default function PlaylistDetailPage({ playlist, onBack }) {
                         onDoubleClick={() => handlePlay(track)}
                         className={`flex items-center gap-3 py-2.5 rounded-lg transition-colors group cursor-pointer
                           ${trackGroup ? 'pl-4 pr-3' : 'px-3'}
-                          ${active ? 'bg-brand-600/10' : 'hover:bg-white/5'}`}
+                          ${active ? 'bg-brand-600/25 border border-brand-400/20 shadow-sm shadow-black/15' : 'playlist-track-row'}`}
                       >
                         <div className="w-5 shrink-0 flex items-center justify-center">
                           <span className={`text-xs text-white/20 group-hover:hidden ${active ? 'hidden' : ''}`}>{i + 1}</span>
