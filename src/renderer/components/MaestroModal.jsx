@@ -1,10 +1,47 @@
 import React, { useState, useEffect } from 'react'
-import { X, Save, Sliders, FileText, Youtube, Volume2, ListMusic, Check, Plus } from 'lucide-react'
+import { X, Save, Sliders, FileText, Youtube, Volume2, ListMusic, Check, Plus, Scissors, Trash2 } from 'lucide-react'
+
+function formatTime(seconds) {
+  const value = Math.max(0, Math.floor(Number(seconds) || 0))
+  const min = Math.floor(value / 60)
+  const sec = value % 60
+  return `${min}:${String(sec).padStart(2, '0')}`
+}
+
+function parseTime(value) {
+  const text = String(value || '').trim()
+  if (!text) return null
+  if (text.includes(':')) {
+    const parts = text.split(':').map(part => Number(part.trim()))
+    if (parts.some(part => !Number.isFinite(part))) return null
+    return parts.reduce((total, part) => total * 60 + part, 0)
+  }
+  const num = Number(text.replace(',', '.'))
+  return Number.isFinite(num) ? num : null
+}
+
+function normalizeCuts(cuts, duration = 0) {
+  const max = Number(duration) || 0
+  return (Array.isArray(cuts) ? cuts : [])
+    .map(cut => ({
+      start: Math.max(0, Number(cut.start) || 0),
+      end: Math.max(0, Number(cut.end) || 0),
+      label: String(cut.label || '').trim(),
+    }))
+    .filter(cut => cut.end > cut.start)
+    .map(cut => max ? { ...cut, start: Math.min(cut.start, max), end: Math.min(cut.end, max) } : cut)
+    .filter(cut => cut.end > cut.start)
+    .sort((a, b) => a.start - b.start)
+}
 
 export default function MaestroModal({ track, onClose, onSave }) {
   const [gain,      setGain]      = useState(track.gain   ?? 0)
   const [lyrics,    setLyrics]    = useState(track.lyrics ?? '')
   const [ytUrl,     setYtUrl]     = useState(track.yt_url ?? '')
+  const [cuts,      setCuts]      = useState(() => normalizeCuts(track.cut_segments, track.duration))
+  const [cutStart,  setCutStart]  = useState('')
+  const [cutEnd,    setCutEnd]    = useState('')
+  const [cutError,  setCutError]  = useState('')
   const [playlists, setPlaylists] = useState([])
   const [membership,setMembership]= useState(new Set()) // playlist IDs this track belongs to
   const [adding,    setAdding]    = useState(null) // playlist ID being added
@@ -24,7 +61,34 @@ export default function MaestroModal({ track, onClose, onSave }) {
   }, [track.id])
 
   function handleSave() {
-    onSave({ ...track, gain, lyrics, yt_url: ytUrl })
+    onSave({ ...track, gain, lyrics, yt_url: ytUrl, cut_segments: normalizeCuts(cuts, track.duration) })
+  }
+
+  function handleAddCut() {
+    const start = parseTime(cutStart)
+    const end = parseTime(cutEnd)
+    if (start == null || end == null) {
+      setCutError('Informe início e fim do corte.')
+      return
+    }
+    if (end <= start) {
+      setCutError('O fim precisa ser maior que o início.')
+      return
+    }
+    if (track.duration && start >= track.duration) {
+      setCutError('O início está fora da duração da música.')
+      return
+    }
+
+    const next = normalizeCuts([...cuts, { start, end }], track.duration)
+    setCuts(next)
+    setCutStart('')
+    setCutEnd('')
+    setCutError('')
+  }
+
+  function handleRemoveCut(index) {
+    setCuts(prev => prev.filter((_, i) => i !== index))
   }
 
   async function handleAddToPlaylist(playlistId) {
@@ -73,6 +137,55 @@ export default function MaestroModal({ track, onClose, onSave }) {
             <button onClick={() => setGain(0)} className="text-xs text-white/30 hover:text-white/70 transition-colors ml-1">
               Reset
             </button>
+          </div>
+        </div>
+
+        {/* Cut segments */}
+        <div>
+          <label className="text-xs text-white/50 mb-2 flex items-center gap-1.5">
+            <Scissors size={12} />
+            Cortar interrupções
+            {track.duration ? <span className="text-white/25">duração {formatTime(track.duration)}</span> : null}
+          </label>
+          <div className="rounded-xl border border-white/10 bg-surface-900/35 p-3 flex flex-col gap-3">
+            <div className="grid grid-cols-[1fr_1fr_auto] gap-2">
+              <input
+                value={cutStart}
+                onChange={e => setCutStart(e.target.value)}
+                placeholder="Início 1:23"
+                className="input-base text-xs"
+              />
+              <input
+                value={cutEnd}
+                onChange={e => setCutEnd(e.target.value)}
+                placeholder="Fim 1:48"
+                className="input-base text-xs"
+              />
+              <button onClick={handleAddCut} className="btn-ghost px-3 text-xs flex items-center gap-1.5">
+                <Plus size={12} /> Adicionar
+              </button>
+            </div>
+
+            {cutError && <p className="text-xs text-red-300">{cutError}</p>}
+
+            {cuts.length > 0 ? (
+              <div className="flex flex-col gap-1.5">
+                {cuts.map((cut, index) => (
+                  <div key={`${cut.start}-${cut.end}-${index}`} className="flex items-center gap-2 rounded-lg bg-surface-800/70 border border-white/8 px-2 py-1.5">
+                    <span className="text-xs text-white/70 flex-1">
+                      Pular de <span className="font-mono text-brand-300">{formatTime(cut.start)}</span> até <span className="font-mono text-brand-300">{formatTime(cut.end)}</span>
+                    </span>
+                    <button onClick={() => handleRemoveCut(index)} className="btn-ghost p-1 text-white/35 hover:text-red-300" title="Remover corte">
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-white/30">
+                Adicione trechos para o player pular automaticamente sem modificar o arquivo original.
+              </p>
+            )}
           </div>
         </div>
 

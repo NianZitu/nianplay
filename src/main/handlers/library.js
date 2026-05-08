@@ -5,6 +5,17 @@ const { getDB } = require('../db')
 
 const AUDIO_EXTENSIONS = new Set(['.mp3', '.flac', '.wav', '.aac', '.ogg', '.m4a', '.opus', '.wma'])
 
+function normalizeCutSegments(cuts) {
+  return (Array.isArray(cuts) ? cuts : [])
+    .map(cut => ({
+      start: Number(cut.start) || 0,
+      end: Number(cut.end) || 0,
+      label: cut.label || '',
+    }))
+    .filter(cut => cut.end > cut.start)
+    .sort((a, b) => a.start - b.start)
+}
+
 function findTrackMatch(tracks, track) {
   const norm = s => (s || '').toLowerCase().trim()
   if (track.yt_url) {
@@ -85,6 +96,7 @@ async function scanDirectory(dirPath) {
         genre:      (common.genre && common.genre[0]) || '',
         year:       common.year || null,
         gain:       0.0,
+        cut_segments: [],
         lyrics:     '',
         yt_url:     '',
         created_at: Date.now(),
@@ -125,7 +137,12 @@ module.exports = function registerLibraryHandlers(ipcMain) {
     const tracks = getDB().tracks.read()
     const idx = tracks.findIndex(t => t.id === updated.id)
     if (idx === -1) return false
-    tracks[idx] = { ...tracks[idx], ...updated, updated_at: Date.now() }
+    tracks[idx] = {
+      ...tracks[idx],
+      ...updated,
+      cut_segments: normalizeCutSegments(updated.cut_segments ?? tracks[idx].cut_segments),
+      updated_at: Date.now(),
+    }
     getDB().tracks.write(tracks)
     return true
   })
@@ -157,6 +174,9 @@ module.exports = function registerLibraryHandlers(ipcMain) {
         if (!byUrl.lyrics  && track.lyrics)   { byUrl.lyrics  = track.lyrics;   changed = true }
         if (!byUrl.gain    && track.gain)      { byUrl.gain    = track.gain;     changed = true }
         if (!byUrl.album   && track.album)     { byUrl.album   = track.album;    changed = true }
+        if ((!byUrl.cut_segments || byUrl.cut_segments.length === 0) && track.cut_segments?.length) {
+          byUrl.cut_segments = normalizeCutSegments(track.cut_segments); changed = true
+        }
         if (changed) { byUrl.updated_at = Date.now(); db.tracks.write(tracks) }
         return { skipped: true, id: byUrl.id }
       }
@@ -169,6 +189,9 @@ module.exports = function registerLibraryHandlers(ipcMain) {
       let changed = false
       if (!byMeta.yt_url && track.yt_url) { byMeta.yt_url = track.yt_url; changed = true }
       if (!byMeta.lyrics && track.lyrics)  { byMeta.lyrics = track.lyrics; changed = true }
+      if ((!byMeta.cut_segments || byMeta.cut_segments.length === 0) && track.cut_segments?.length) {
+        byMeta.cut_segments = normalizeCutSegments(track.cut_segments); changed = true
+      }
       if (changed) { byMeta.updated_at = Date.now(); db.tracks.write(tracks) }
       return { skipped: true, id: byMeta.id }
     }
@@ -184,6 +207,7 @@ module.exports = function registerLibraryHandlers(ipcMain) {
       cover_url: track.cover_url || '',
       lyrics:    track.lyrics    || '',
       gain:      track.gain      || 0,
+      cut_segments: normalizeCutSegments(track.cut_segments),
       added_at:  Date.now(),
       created_at: Date.now(),
       updated_at: Date.now(),
@@ -226,6 +250,7 @@ module.exports = function registerLibraryHandlers(ipcMain) {
         yt_url:   t.yt_url,
         lyrics:   t.lyrics,
         gain:     t.gain,
+        cut_segments: normalizeCutSegments(t.cut_segments),
         file_path: t.file_path,
       })),
     }
@@ -283,6 +308,9 @@ module.exports = function registerLibraryHandlers(ipcMain) {
           let changed = false
           if (!existing[idx].yt_url  && imp.yt_url)  { existing[idx].yt_url  = imp.yt_url;  changed = true }
           if (!existing[idx].lyrics  && imp.lyrics)  { existing[idx].lyrics  = imp.lyrics;  changed = true }
+          if ((!existing[idx].cut_segments || existing[idx].cut_segments.length === 0) && imp.cut_segments?.length) {
+            existing[idx].cut_segments = normalizeCutSegments(imp.cut_segments); changed = true
+          }
           if (changed) { existing[idx].updated_at = Date.now(); merged++ }
         }
         continue
@@ -299,6 +327,7 @@ module.exports = function registerLibraryHandlers(ipcMain) {
         genre:      imp.genre    || '',
         year:       imp.year     || null,
         gain:       imp.gain     || 0,
+        cut_segments: normalizeCutSegments(imp.cut_segments),
         lyrics:     imp.lyrics   || '',
         yt_url:     imp.yt_url   || '',
         created_at: Date.now(),

@@ -99,7 +99,7 @@ export default function LibraryPage() {
   const [importing,   setImporting]   = useState(false)
   const [libToast,    setLibToast]    = useState(null)
 
-  const { playTrack, playNext, currentTrack, isPlaying } = usePlayer()
+  const { playTrack, playNext, currentTrack, isPlaying, updateQueuedTrack } = usePlayer()
   const isElectron = !!window.electron
 
   useEffect(() => { loadTracks() }, [])
@@ -336,6 +336,7 @@ export default function LibraryPage() {
           onSave={async (updated) => {
             if (isElectron) await window.electron.library.updateTrack(updated)
             setTracks(prev => prev.map(t => t.id === updated.id ? { ...t, ...updated } : t))
+            updateQueuedTrack(updated)
             setSelected(null)
           }}
         />

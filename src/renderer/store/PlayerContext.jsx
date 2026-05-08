@@ -25,6 +25,7 @@ export function PlayerProvider({ children }) {
   const shuffledOrderRef = useRef([])  // indices into queue[], in shuffle order
   const shuffledPosRef   = useRef(0)   // current position inside shuffledOrder
   const groupsEnabledRef = useRef(false)
+  const currentTrackRef  = useRef(null)
 
   const [queue,        setQueue]        = useState([])
   const [currentIdx,   setCurrentIdx]   = useState(-1)
@@ -48,6 +49,29 @@ export function PlayerProvider({ children }) {
   groupsEnabledRef.current = groupsEnabled
 
   const currentTrack = queue[currentIdx] ?? null
+  currentTrackRef.current = currentTrack
+
+  function normalizedCuts(track) {
+    if (!Array.isArray(track?.cut_segments)) return []
+    return track.cut_segments
+      .map(seg => ({
+        start: Number(seg.start),
+        end:   Number(seg.end),
+      }))
+      .filter(seg => Number.isFinite(seg.start) && Number.isFinite(seg.end) && seg.end > seg.start)
+      .sort((a, b) => a.start - b.start)
+  }
+
+  function skipCutSegmentIfNeeded() {
+    const audio = audioRef.current
+    const track = currentTrackRef.current
+    if (!audio || !track) return
+    const now = audio.currentTime || 0
+    const cut = normalizedCuts(track).find(seg => now >= seg.start && now < seg.end)
+    if (!cut) return
+    const dur = audio.duration || track.duration || 0
+    audio.currentTime = dur ? Math.min(cut.end + 0.05, dur) : cut.end + 0.05
+  }
 
   function ensureAudioContext() {
     if (!contextRef.current) {
@@ -80,6 +104,7 @@ export function PlayerProvider({ children }) {
     if (!audioRef.current) return
     currentIdxRef.current = queueIdx
     setCurrentIdx(queueIdx)
+    currentTrackRef.current = track
     audioRef.current.src = `file://${track.file_path}`
     if (gainNodeRef.current) gainNodeRef.current.gain.value = Math.pow(10, (track.gain || 0) / 20)
     audioRef.current.volume = volumeRef.current
@@ -123,10 +148,12 @@ export function PlayerProvider({ children }) {
     if (!audioRef.current) {
       audioRef.current = new Audio()
       audioRef.current.addEventListener('timeupdate', () => {
+        skipCutSegmentIfNeeded()
         const dur = audioRef.current.duration || 1
         setProgress(audioRef.current.currentTime / dur)
         setDuration(dur)
       })
+      audioRef.current.addEventListener('loadedmetadata', () => { skipCutSegmentIfNeeded() })
       audioRef.current.addEventListener('ended', () => { _advanceNext() })
     }
 
@@ -140,6 +167,7 @@ export function PlayerProvider({ children }) {
 
     setCurrentIdx(safeIdx)
     currentIdxRef.current = safeIdx
+    currentTrackRef.current = track
 
     // Rebuild shuffle order whenever a new track is chosen manually
     if (shuffleRef.current) {
@@ -226,7 +254,10 @@ export function PlayerProvider({ children }) {
   }, [])
 
   const seek = useCallback((ratio) => {
-    if (audioRef.current) audioRef.current.currentTime = ratio * (audioRef.current.duration || 0)
+    if (audioRef.current) {
+      audioRef.current.currentTime = ratio * (audioRef.current.duration || 0)
+      skipCutSegmentIfNeeded()
+    }
   }, [])
 
   const setVolume = useCallback((v) => {
@@ -248,6 +279,21 @@ export function PlayerProvider({ children }) {
   const setGroupsEnabled = useCallback((val) => {
     groupsEnabledRef.current = val
     setGroupsEnabledState(val)
+  }, [])
+
+  const updateQueuedTrack = useCallback((updatedTrack) => {
+    if (!updatedTrack?.id) return
+    const nextQueue = queueRef.current.map(t => t.id === updatedTrack.id ? { ...t, ...updatedTrack } : t)
+    queueRef.current = nextQueue
+    setQueue(nextQueue)
+    const current = nextQueue[currentIdxRef.current]
+    if (current?.id === updatedTrack.id) {
+      currentTrackRef.current = current
+      if (gainNodeRef.current) {
+        gainNodeRef.current.gain.value = Math.pow(10, (current.gain || 0) / 20)
+      }
+      skipCutSegmentIfNeeded()
+    }
   }, [])
 
   // Upcoming queue: tracks that will play next (in shuffled or normal order)
@@ -282,6 +328,7 @@ export function PlayerProvider({ children }) {
       anchorTrack, setAnchorTrack,
       groupsEnabled, setGroupsEnabled,
       playTrack, playNext, playQueueIndex, togglePlay, skipNext, skipPrev, seek, setVolume,
+      updateQueuedTrack,
       upcomingItems,
       gainNode: gainRef,
       audioContext: contextRef,

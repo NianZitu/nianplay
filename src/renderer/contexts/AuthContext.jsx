@@ -60,6 +60,17 @@ function publicMediaUrl(src) {
   return /^https?:\/\//.test(src) ? src : ''
 }
 
+function normalizeCutSegments(cuts) {
+  return (Array.isArray(cuts) ? cuts : [])
+    .map(cut => ({
+      start: Number(cut.start) || 0,
+      end: Number(cut.end) || 0,
+      label: cut.label || '',
+    }))
+    .filter(cut => cut.end > cut.start)
+    .sort((a, b) => a.start - b.start)
+}
+
 function trackKey(track) {
   return `${(track.title || '').toLowerCase().trim()}|${(track.artist || '').toLowerCase().trim()}|${Math.round(track.duration || 0)}`
 }
@@ -208,6 +219,7 @@ export function AuthProvider({ children }) {
           cover_url: t.cover_url || '',
           lyrics:    t.lyrics    || '',
           gain:      t.gain      || 0,
+          cut_segments: normalizeCutSegments(t.cut_segments),
           updatedAt: serverTimestamp(),
         }, { merge: true }))
       }
@@ -254,6 +266,7 @@ export function AuthProvider({ children }) {
             cover_url:      publicMediaUrl(t.cover_url || t.cover_path),
             lyrics:         t.lyrics || '',
             gain:           t.gain || 0,
+            cut_segments:   normalizeCutSegments(t.cut_segments),
             position:       t.position     || 0,
             group_name:     grp?.name      || null,
             group_position: grp ? (t.group_position ?? 0) : null,
@@ -268,6 +281,7 @@ export function AuthProvider({ children }) {
             cover_url:      publicMediaUrl(t.cover_url || t.cover_path),
             lyrics:         t.lyrics    || '',
             gain:           t.gain      || 0,
+            cut_segments:   normalizeCutSegments(t.cut_segments),
             group_name:     grp?.name   || null,
             group_position: grp ? (t.group_position ?? 0) : null,
           })
@@ -321,13 +335,29 @@ export function AuthProvider({ children }) {
       // Fetch cloud tracks
       const tracksSnap = await getDocs(collection(db, 'users', user.uid, 'tracks'))
       const newTracks  = []
+      const mergeTrackOps = []
       tracksSnap.forEach(d => {
         const t   = d.data()
+        const existing = findTrackMatch(localTracks || [], t)
+        if (existing) {
+          const mergedCuts = normalizeCutSegments(t.cut_segments)
+          const needsCutMerge = mergedCuts.length > 0 && normalizeCutSegments(existing.cut_segments).length === 0
+          if (needsCutMerge || (!existing.lyrics && t.lyrics) || (!existing.yt_url && t.yt_url)) {
+            mergeTrackOps.push(window.electron.library.updateTrack({
+              ...existing,
+              yt_url: existing.yt_url || t.yt_url || '',
+              lyrics: existing.lyrics || t.lyrics || '',
+              cut_segments: needsCutMerge ? mergedCuts : normalizeCutSegments(existing.cut_segments),
+            }))
+          }
+          return
+        }
         if (t.yt_url && localUrlSet.has(t.yt_url)) return   // already exists by URL
         const key = trackKey(t)
         if (localMetaSet.has(key)) return                    // already exists by meta
         newTracks.push(t)
       })
+      if (mergeTrackOps.length > 0) await Promise.all(mergeTrackOps)
 
       // Import missing tracks into local library as virtual entries (no file_path)
       for (const t of newTracks) {
@@ -340,6 +370,7 @@ export function AuthProvider({ children }) {
           cover_url: t.cover_url || '',
           lyrics:    t.lyrics   || '',
           gain:      t.gain     || 0,
+          cut_segments: normalizeCutSegments(t.cut_segments),
           file_path: '',
         })
       }
@@ -382,6 +413,7 @@ export function AuthProvider({ children }) {
               cover_url: pt.cover_url || '',
               lyrics:    pt.lyrics   || '',
               gain:      pt.gain     || 0,
+              cut_segments: normalizeCutSegments(pt.cut_segments),
               file_path: '',
             })
             if (imported?.id) {
@@ -390,7 +422,14 @@ export function AuthProvider({ children }) {
               if (match) allTracks.push(match)
             }
           }
-          if (match) await window.electron.playlists.addTrack(localPl.id, match.id)
+          if (match) {
+            const mergedCuts = normalizeCutSegments(pt.cut_segments)
+            if (mergedCuts.length > 0 && normalizeCutSegments(match.cut_segments).length === 0) {
+              await window.electron.library.updateTrack({ ...match, cut_segments: mergedCuts })
+              match.cut_segments = mergedCuts
+            }
+            await window.electron.playlists.addTrack(localPl.id, match.id)
+          }
         }
 
         // ── Restore groups ──────────────────────────────────────────────────

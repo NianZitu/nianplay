@@ -780,7 +780,7 @@ export default function PlaylistDetailPage({ playlist, onBack }) {
   const [dropdownPos,    setDropdownPos]    = useState(null) // { top, right } fixed coords
   const [expandedGroups, setExpandedGroups] = useState(new Set())
   const { playTrack, playNext, setShuffle, currentTrack, isPlaying, setQueue, queue,
-          setGroupsEnabled: setPlayerGroupsEnabled } = usePlayer()
+          setGroupsEnabled: setPlayerGroupsEnabled, updateQueuedTrack } = usePlayer()
 
   useEffect(() => { loadTracks() }, [playlist.id])
   useEffect(() => { loadGroups() }, [playlist.id])
@@ -1397,6 +1397,7 @@ export default function PlaylistDetailPage({ playlist, onBack }) {
           onSave={async (updated) => {
             if (window.electron) await window.electron.library.updateTrack(updated)
             setTracks(prev => prev.map(t => t.id === updated.id ? { ...t, ...updated } : t))
+            updateQueuedTrack(updated)
             setMaestroTrack(null)
           }}
         />

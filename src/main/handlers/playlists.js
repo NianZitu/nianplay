@@ -3,6 +3,17 @@ const { getDB } = require('../db')
 const path = require('path')
 const fs   = require('fs')
 
+function normalizeCutSegments(cuts) {
+  return (Array.isArray(cuts) ? cuts : [])
+    .map(cut => ({
+      start: Number(cut.start) || 0,
+      end: Number(cut.end) || 0,
+      label: cut.label || '',
+    }))
+    .filter(cut => cut.end > cut.start)
+    .sort((a, b) => a.start - b.start)
+}
+
 function findTrackMatch(tracks, track) {
   const norm = s => (s || '').toLowerCase().trim()
   if (track.yt_url) {
@@ -75,6 +86,7 @@ function importPlaylistData(data, fallbackName = 'Playlist Importada') {
         genre:      imp.genre    || '',
         year:       imp.year     || null,
         gain:       imp.gain     || 0,
+        cut_segments: normalizeCutSegments(imp.cut_segments),
         lyrics:     imp.lyrics   || '',
         yt_url:     imp.yt_url   || '',
         created_at: Date.now(),
@@ -88,6 +100,9 @@ function importPlaylistData(data, fallbackName = 'Playlist Importada') {
       if (!match.lyrics && imp.lyrics)       { match.lyrics = imp.lyrics; changed = true }
       if (!match.cover_path && imp.cover_url){ match.cover_path = imp.cover_url; changed = true }
       if (!match.gain && imp.gain)           { match.gain = imp.gain; changed = true }
+      if ((!match.cut_segments || match.cut_segments.length === 0) && imp.cut_segments?.length) {
+        match.cut_segments = normalizeCutSegments(imp.cut_segments); changed = true
+      }
       if (changed) match.updated_at = Date.now()
     }
 
@@ -431,6 +446,7 @@ module.exports = function registerPlaylistHandlers(ipcMain) {
         cover_url:      t.cover_url || t.cover_path || '',
         lyrics:         t.lyrics,
         gain:           t.gain,
+        cut_segments:   normalizeCutSegments(t.cut_segments),
         group_name:     row.group_id ? (groupById[row.group_id]?.name || null) : null,
         group_position: row.group_id ? (row.group_position ?? 0) : null,
       }
@@ -568,6 +584,7 @@ module.exports = function registerPlaylistHandlers(ipcMain) {
           genre:      imp.genre    || '',
           year:       imp.year     || null,
           gain:       imp.gain     || 0,
+          cut_segments: normalizeCutSegments(imp.cut_segments),
           lyrics:     imp.lyrics   || '',
           yt_url:     imp.yt_url   || '',
           created_at: Date.now(),
@@ -581,6 +598,9 @@ module.exports = function registerPlaylistHandlers(ipcMain) {
         if (!match.yt_url && imp.yt_url)   { match.yt_url  = imp.yt_url;  changed = true }
         if (!match.lyrics && imp.lyrics)   { match.lyrics  = imp.lyrics;  changed = true }
         if (!match.gain   && imp.gain)     { match.gain    = imp.gain;    changed = true }
+        if ((!match.cut_segments || match.cut_segments.length === 0) && imp.cut_segments?.length) {
+          match.cut_segments = normalizeCutSegments(imp.cut_segments); changed = true
+        }
         if (changed) match.updated_at = Date.now()
       }
 
