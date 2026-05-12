@@ -10,6 +10,7 @@ import SettingsPage       from './pages/SettingsPage'
 import PlaylistsPage      from './pages/PlaylistsPage'
 import PlaylistDetailPage from './pages/PlaylistDetailPage'
 import CommunityPage      from './pages/CommunityPage'
+import UpdateLogsPage     from './pages/UpdateLogsPage'
 import { PlayerProvider } from './store/PlayerContext'
 import { AuthProvider }   from './contexts/AuthContext'
 
@@ -74,6 +75,7 @@ export default function App() {
       case 'library':        return <LibraryPage />
       case 'downloads':      return <DownloadsPage />
       case 'community':      return <CommunityPage />
+      case 'logs':           return <UpdateLogsPage />
       case 'settings':       return <SettingsPage />
       case 'playlists':      return <PlaylistsPage onOpenPlaylist={handleOpenPlaylist} />
       case 'playlist-detail':
