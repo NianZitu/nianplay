@@ -11,6 +11,63 @@ function fisherYates(arr) {
   return a
 }
 
+function normalizedCuts(track, duration = 0) {
+  const max = Number(duration) || Number(track?.duration) || 0
+  const cuts = (Array.isArray(track?.cut_segments) ? track.cut_segments : [])
+    .map(seg => ({
+      start: Math.max(0, Number(seg.start) || 0),
+      end: Math.max(0, Number(seg.end) || 0),
+    }))
+    .map(seg => max ? { start: Math.min(seg.start, max), end: Math.min(seg.end, max) } : seg)
+    .filter(seg => seg.end > seg.start)
+    .sort((a, b) => a.start - b.start)
+
+  const merged = []
+  for (const cut of cuts) {
+    const prev = merged[merged.length - 1]
+    if (prev && cut.start <= prev.end) prev.end = Math.max(prev.end, cut.end)
+    else merged.push({ ...cut })
+  }
+  return merged
+}
+
+function playableDuration(track, audioDuration = 0) {
+  const dur = Number(audioDuration) || Number(track?.duration) || 0
+  if (!dur) return 0
+  const removed = normalizedCuts(track, dur).reduce((sum, cut) => sum + (cut.end - cut.start), 0)
+  return Math.max(0, dur - removed)
+}
+
+function audioToPlayableTime(audioTime, track, audioDuration = 0) {
+  const time = Math.max(0, Number(audioTime) || 0)
+  let removedBefore = 0
+  for (const cut of normalizedCuts(track, audioDuration)) {
+    if (time >= cut.end) {
+      removedBefore += cut.end - cut.start
+    } else if (time > cut.start) {
+      return Math.max(0, cut.start - removedBefore)
+    } else {
+      break
+    }
+  }
+  return Math.max(0, time - removedBefore)
+}
+
+function playableToAudioTime(playableTime, track, audioDuration = 0) {
+  const target = Math.max(0, Number(playableTime) || 0)
+  let cursor = 0
+  let remaining = target
+  for (const cut of normalizedCuts(track, audioDuration)) {
+    const availableBeforeCut = Math.max(0, cut.start - cursor)
+    if (remaining <= availableBeforeCut) return cursor + remaining
+    remaining -= availableBeforeCut
+    cursor = cut.end
+  }
+  const dur = Number(audioDuration) || Number(track?.duration) || 0
+  const audioTime = cursor + remaining
+  return dur ? Math.min(audioTime, dur) : audioTime
+}
+
 export function PlayerProvider({ children }) {
   const audioRef    = useRef(null)
   const gainRef     = useRef(null)
@@ -51,26 +108,25 @@ export function PlayerProvider({ children }) {
   const currentTrack = queue[currentIdx] ?? null
   currentTrackRef.current = currentTrack
 
-  function normalizedCuts(track) {
-    if (!Array.isArray(track?.cut_segments)) return []
-    return track.cut_segments
-      .map(seg => ({
-        start: Number(seg.start),
-        end:   Number(seg.end),
-      }))
-      .filter(seg => Number.isFinite(seg.start) && Number.isFinite(seg.end) && seg.end > seg.start)
-      .sort((a, b) => a.start - b.start)
-  }
-
   function skipCutSegmentIfNeeded() {
     const audio = audioRef.current
     const track = currentTrackRef.current
     if (!audio || !track) return
     const now = audio.currentTime || 0
-    const cut = normalizedCuts(track).find(seg => now >= seg.start && now < seg.end)
+    const cut = normalizedCuts(track, audio.duration).find(seg => now >= seg.start && now < seg.end)
     if (!cut) return
     const dur = audio.duration || track.duration || 0
     audio.currentTime = dur ? Math.min(cut.end + 0.05, dur) : cut.end + 0.05
+  }
+
+  function syncPlaybackClock() {
+    const audio = audioRef.current
+    const track = currentTrackRef.current
+    if (!audio || !track) return
+    const playableDur = playableDuration(track, audio.duration)
+    const playableNow = audioToPlayableTime(audio.currentTime, track, audio.duration)
+    setDuration(playableDur || audio.duration || 0)
+    setProgress(playableDur ? Math.max(0, Math.min(1, playableNow / playableDur)) : 0)
   }
 
   function ensureAudioContext() {
@@ -149,11 +205,12 @@ export function PlayerProvider({ children }) {
       audioRef.current = new Audio()
       audioRef.current.addEventListener('timeupdate', () => {
         skipCutSegmentIfNeeded()
-        const dur = audioRef.current.duration || 1
-        setProgress(audioRef.current.currentTime / dur)
-        setDuration(dur)
+        syncPlaybackClock()
       })
-      audioRef.current.addEventListener('loadedmetadata', () => { skipCutSegmentIfNeeded() })
+      audioRef.current.addEventListener('loadedmetadata', () => {
+        skipCutSegmentIfNeeded()
+        syncPlaybackClock()
+      })
       audioRef.current.addEventListener('ended', () => { _advanceNext() })
     }
 
@@ -237,26 +294,43 @@ export function PlayerProvider({ children }) {
   const skipPrev = useCallback(() => {
     const q   = queueRef.current
     if (q.length === 0) return
-    if (audioRef.current && audioRef.current.currentTime > 3) {
-      audioRef.current.currentTime = 0
-      return
+    if (audioRef.current) {
+      const track = currentTrackRef.current
+      const playableNow = audioToPlayableTime(audioRef.current.currentTime, track, audioRef.current.duration)
+      if (playableNow > 3) {
+        audioRef.current.currentTime = playableToAudioTime(0, track, audioRef.current.duration)
+        skipCutSegmentIfNeeded()
+        syncPlaybackClock()
+        return
+      }
     }
     if (shuffleRef.current) {
       const pos = shuffledPosRef.current
-      if (pos <= 0) { audioRef.current && (audioRef.current.currentTime = 0); return }
+      if (pos <= 0) {
+        if (audioRef.current) {
+          const track = currentTrackRef.current
+          audioRef.current.currentTime = playableToAudioTime(0, track, audioRef.current.duration)
+          skipCutSegmentIfNeeded()
+          syncPlaybackClock()
+        }
+        return
+      }
       const prevPos = pos - 1
       shuffledPosRef.current = prevPos
       setShuffledPos(prevPos)
       _playByIdx(shuffledOrderRef.current[prevPos])
-    } else {
-      _playByIdx((currentIdxRef.current - 1 + q.length) % q.length)
+      return
     }
+    _playByIdx((currentIdxRef.current - 1 + q.length) % q.length)
   }, [])
 
   const seek = useCallback((ratio) => {
     if (audioRef.current) {
-      audioRef.current.currentTime = ratio * (audioRef.current.duration || 0)
+      const track = currentTrackRef.current
+      const playableDur = playableDuration(track, audioRef.current.duration)
+      audioRef.current.currentTime = playableToAudioTime(ratio * playableDur, track, audioRef.current.duration)
       skipCutSegmentIfNeeded()
+      syncPlaybackClock()
     }
   }, [])
 
@@ -293,6 +367,7 @@ export function PlayerProvider({ children }) {
         gainNodeRef.current.gain.value = Math.pow(10, (current.gain || 0) / 20)
       }
       skipCutSegmentIfNeeded()
+      syncPlaybackClock()
     }
   }, [])
 

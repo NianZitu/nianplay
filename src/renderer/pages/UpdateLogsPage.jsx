@@ -3,6 +3,26 @@ import { CheckCircle2, History, Sparkles } from 'lucide-react'
 
 const UPDATE_LOGS = [
   {
+    version: '1.1.16',
+    title: 'Tempo limpo dos cortes',
+    date: '13/05/2026',
+    changes: [
+      'Trechos cortados deixam de contar na duração e no progresso exibidos pelo player.',
+      'Corrige o botão de voltar quando a interrupção cortada está no início da música.',
+      'Buscar na barra de progresso passa a usar o tempo da música sem os cortes.',
+    ],
+  },
+  {
+    version: '1.1.15',
+    title: 'Logs de atualização',
+    date: '12/05/2026',
+    changes: [
+      'Adiciona uma nova aba Logs no menu lateral.',
+      'Mostra uma lista de versões com as mudanças de cada atualização.',
+      'Destaca a versão atual instalada.',
+    ],
+  },
+  {
     version: '1.1.14',
     title: 'Cortes de música',
     date: '08/05/2026',
