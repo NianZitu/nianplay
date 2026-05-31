@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Download, X, RefreshCw, CheckCircle2, Loader2, ChevronDown, ChevronUp } from 'lucide-react'
+import { getUpdateLogByVersion } from '../data/updateLogs'
 
 const DISMISSED_KEY = 'nianplay_update_dismissed'
 
@@ -17,6 +18,11 @@ function parseReleaseNotes(notes) {
     .map(line => line.replace(/^[-*•]\s*/, '').trim())
     .filter(Boolean)
     .slice(0, 6)
+}
+
+function isGenericReleaseNote(line) {
+  const t = (line || '').toLowerCase().trim()
+  return t === 'nova versao do nianplay.' || t === 'nova versao do nianplay'
 }
 
 export default function UpdateBanner() {
@@ -54,7 +60,11 @@ export default function UpdateBanner() {
 
   if (!update || dismissed) return null
 
-  const notes = parseReleaseNotes(update.notes)
+  const parsedNotes = parseReleaseNotes(update.notes)
+  const fallbackLog = getUpdateLogByVersion(update.version)
+  const notes = (!parsedNotes.length || parsedNotes.every(isGenericReleaseNote))
+    ? (fallbackLog?.changes || [])
+    : parsedNotes
 
   function handleDownload() {
     setPhase('downloading')

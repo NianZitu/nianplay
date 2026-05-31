@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { Save, FolderOpen, Info, Cookie, AlertTriangle, CheckCircle, Youtube, RefreshCw, Download, CheckCircle2, Loader2, Camera, UserRound, Sparkles, Image as ImageIcon, Video, Ban } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { getUpdateLogByVersion } from '../data/updateLogs'
 
 const BROWSERS = [
   { value: 'auto',    label: 'Auto-detectar' },
@@ -38,6 +39,11 @@ function parseReleaseNotes(notes) {
     .map(line => line.replace(/^[-*•]\s*/, '').trim())
     .filter(Boolean)
     .slice(0, 8)
+}
+
+function isGenericReleaseNote(line) {
+  const t = (line || '').toLowerCase().trim()
+  return t === 'nova versao do nianplay.' || t === 'nova versao do nianplay'
 }
 
 function frameClass(frame) {
@@ -235,7 +241,11 @@ export default function SettingsPage() {
   }
 
   const showDpapiWarning = cookieBrowser === 'edge' || cookieBrowser === 'chrome'
-  const updateNotes = parseReleaseNotes(updateInfo?.notes)
+  const parsedNotes = parseReleaseNotes(updateInfo?.notes)
+  const fallbackLog = getUpdateLogByVersion(updateInfo?.version)
+  const updateNotes = (!parsedNotes.length || parsedNotes.every(isGenericReleaseNote))
+    ? (fallbackLog?.changes || [])
+    : parsedNotes
 
   return (
     <div className="h-full overflow-y-auto p-6">
