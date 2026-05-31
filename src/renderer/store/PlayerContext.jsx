@@ -95,6 +95,8 @@ export function PlayerProvider({ children }) {
   const [shuffledOrder,setShuffledOrder]= useState([])
   const [shuffledPos,  setShuffledPos]  = useState(0)
   const [groupsEnabled,setGroupsEnabledState] = useState(false)
+  const restoringRef = useRef(false)
+  const persistTimerRef = useRef(null)
 
   // Keep refs in sync every render
   queueRef.current         = queue
@@ -107,6 +109,22 @@ export function PlayerProvider({ children }) {
 
   const currentTrack = queue[currentIdx] ?? null
   currentTrackRef.current = currentTrack
+
+  function ensureAudioElement() {
+    if (!audioRef.current) {
+      audioRef.current = new Audio()
+      audioRef.current.addEventListener('timeupdate', () => {
+        skipCutSegmentIfNeeded()
+        syncPlaybackClock()
+      })
+      audioRef.current.addEventListener('loadedmetadata', () => {
+        skipCutSegmentIfNeeded()
+        syncPlaybackClock()
+      })
+      audioRef.current.addEventListener('ended', () => { _advanceNext() })
+    }
+    return audioRef.current
+  }
 
   function skipCutSegmentIfNeeded() {
     const audio = audioRef.current
@@ -139,6 +157,22 @@ export function PlayerProvider({ children }) {
       gainNodeRef.current = gain
     }
     return { ctx: contextRef.current, gain: gainRef.current }
+  }
+
+  function persistSession() {
+    if (!window.electron?.settings?.set || restoringRef.current) return
+    const q = queueRef.current || []
+    const session = {
+      queue: q,
+      currentIdx: currentIdxRef.current,
+      currentTime: audioRef.current?.currentTime || 0,
+      volume: volumeRef.current,
+      shuffle: shuffleRef.current,
+      shuffledOrder: shuffledOrderRef.current,
+      shuffledPos: shuffledPosRef.current,
+      groupsEnabled: groupsEnabledRef.current,
+    }
+    window.electron.settings.set('playerSession', session).catch(() => {})
   }
 
   // Build a shuffled order starting from the given queue index
@@ -201,18 +235,7 @@ export function PlayerProvider({ children }) {
     const idx = q.findIndex(t => t.id === track.id)
     const safeIdx = idx >= 0 ? idx : 0
 
-    if (!audioRef.current) {
-      audioRef.current = new Audio()
-      audioRef.current.addEventListener('timeupdate', () => {
-        skipCutSegmentIfNeeded()
-        syncPlaybackClock()
-      })
-      audioRef.current.addEventListener('loadedmetadata', () => {
-        skipCutSegmentIfNeeded()
-        syncPlaybackClock()
-      })
-      audioRef.current.addEventListener('ended', () => { _advanceNext() })
-    }
+    ensureAudioElement()
 
     const { gain } = ensureAudioContext()
     gainNodeRef.current = gain
@@ -354,6 +377,82 @@ export function PlayerProvider({ children }) {
     groupsEnabledRef.current = val
     setGroupsEnabledState(val)
   }, [])
+
+  React.useEffect(() => {
+    let alive = true
+    async function restoreSession() {
+      if (!window.electron?.settings?.get) return
+      restoringRef.current = true
+      try {
+        const saved = await window.electron.settings.get('playerSession')
+        if (!alive || !saved || !Array.isArray(saved.queue) || saved.queue.length === 0) return
+
+        const safeIdx = Math.max(0, Math.min(Number(saved.currentIdx) || 0, saved.queue.length - 1))
+        setQueue(saved.queue)
+        queueRef.current = saved.queue
+        setCurrentIdx(safeIdx)
+        currentIdxRef.current = safeIdx
+        setVolumeState(typeof saved.volume === 'number' ? saved.volume : 0.8)
+        volumeRef.current = typeof saved.volume === 'number' ? saved.volume : 0.8
+        setGroupsEnabledState(Boolean(saved.groupsEnabled))
+        groupsEnabledRef.current = Boolean(saved.groupsEnabled)
+        setShuffle(Boolean(saved.shuffle))
+        shuffleRef.current = Boolean(saved.shuffle)
+        setShuffledOrder(Array.isArray(saved.shuffledOrder) ? saved.shuffledOrder : [])
+        shuffledOrderRef.current = Array.isArray(saved.shuffledOrder) ? saved.shuffledOrder : []
+        setShuffledPos(Number(saved.shuffledPos) || 0)
+        shuffledPosRef.current = Number(saved.shuffledPos) || 0
+
+        const track = saved.queue[safeIdx]
+        currentTrackRef.current = track
+        if (track?.file_path) {
+          const audio = ensureAudioElement()
+          const { gain } = ensureAudioContext()
+          gainNodeRef.current = gain
+          if (!audio._connected) {
+            const source = contextRef.current.createMediaElementSource(audio)
+            source.connect(gain)
+            audio._connected = true
+          }
+          audio.src = `file://${track.file_path}`
+          gain.gain.value = Math.pow(10, (track.gain || 0) / 20)
+          audio.volume = volumeRef.current
+          const resumeAt = Math.max(0, Number(saved.currentTime) || 0)
+          audio.addEventListener('loadedmetadata', function setResumeTimeOnce() {
+            audio.removeEventListener('loadedmetadata', setResumeTimeOnce)
+            audio.currentTime = Math.min(resumeAt, audio.duration || resumeAt)
+            skipCutSegmentIfNeeded()
+            syncPlaybackClock()
+          })
+        }
+      } catch {}
+      finally {
+        restoringRef.current = false
+      }
+    }
+    restoreSession()
+    return () => { alive = false }
+  }, [])
+
+  React.useEffect(() => {
+    clearTimeout(persistTimerRef.current)
+    persistTimerRef.current = setTimeout(() => persistSession(), 350)
+    return () => clearTimeout(persistTimerRef.current)
+  }, [queue, currentIdx, volume, shuffle, shuffledOrder, shuffledPos, groupsEnabled, isPlaying])
+
+  React.useEffect(() => {
+    function handleBeforeUnload() {
+      persistSession()
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [])
+
+  React.useEffect(() => {
+    if (!queue.length) return
+    const id = setInterval(() => persistSession(), 5000)
+    return () => clearInterval(id)
+  }, [queue.length])
 
   const updateQueuedTrack = useCallback((updatedTrack) => {
     if (!updatedTrack?.id) return

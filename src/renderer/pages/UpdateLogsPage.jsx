@@ -3,6 +3,16 @@ import { CheckCircle2, History, Sparkles } from 'lucide-react'
 
 const UPDATE_LOGS = [
   {
+    version: '1.1.17',
+    title: 'Sessao do player persistente',
+    date: '31/05/2026',
+    changes: [
+      'Ao fechar e abrir o app, a fila do player agora e restaurada automaticamente.',
+      'A musica atual volta no mesmo ponto em que foi interrompida.',
+      'Tambem restaura volume, shuffle e ordem da fila embaralhada da sessao anterior.',
+    ],
+  },
+  {
     version: '1.1.16',
     title: 'Tempo limpo dos cortes',
     date: '13/05/2026',
