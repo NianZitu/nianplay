@@ -759,6 +759,22 @@ function GroupFolder({ group, groupTracks, expanded, onToggle, onPlayGroup, onPl
   )
 }
 
+function IconBtn({ onClick, title, active, amber, disabled, children }) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      disabled={disabled}
+      className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all disabled:opacity-35
+        ${amber  ? 'text-amber-400 bg-amber-500/10 hover:bg-amber-500/20'
+        : active ? 'text-brand-400 bg-brand-600/15 hover:bg-brand-600/25'
+                 : 'text-white/35 hover:text-white/70 hover:bg-white/6'}`}
+    >
+      {children}
+    </button>
+  )
+}
+
 export default function PlaylistDetailPage({ playlist, onBack }) {
   const [tracks,         setTracks]         = useState([])
   const [search,         setSearch]         = useState('')
@@ -776,8 +792,8 @@ export default function PlaylistDetailPage({ playlist, onBack }) {
   const [groupsEnabled,  setGroupsEnabled]  = useState(playlist.groups_enabled || false)
   const [showGroupPanel, setShowGroupPanel] = useState(false)
   const [newGroupName,   setNewGroupName]   = useState('')
-  const [assigningTrack, setAssigningTrack] = useState(null) // track.id whose dropdown is open
-  const [dropdownPos,    setDropdownPos]    = useState(null) // { top, right } fixed coords
+  const [assigningTrack, setAssigningTrack] = useState(null)
+  const [dropdownPos,    setDropdownPos]    = useState(null)
   const [expandedGroups, setExpandedGroups] = useState(new Set())
   const { playTrack, playNext, setShuffle, currentTrack, isPlaying, setQueue, queue,
           setGroupsEnabled: setPlayerGroupsEnabled, updateQueuedTrack } = usePlayer()
@@ -1011,196 +1027,209 @@ export default function PlaylistDetailPage({ playlist, onBack }) {
     if (p) setCoverInput(`file://${p}`)
   }
 
-  const coverSrc    = coverInput || playlist.cover_url
-  const currentIds  = tracks.map(t => t.id)
+  const coverSrc   = coverInput || playlist.cover_url
+  const currentIds = tracks.map(t => t.id)
+  const missingTracks = tracks.filter(t => !t.file_path)
+  const totalDuration = tracks.reduce((s, t) => s + (t.duration || 0), 0)
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
-      {/* Back nav */}
-      <div className="shrink-0 px-4 pt-3 pb-0">
-        <button onClick={onBack} className="btn-ghost px-2 py-1.5 text-white/60 hover:text-white flex items-center gap-1.5 text-sm">
-          <ArrowLeft size={15} /> Voltar
-        </button>
-      </div>
 
-      {/* Header */}
-      <div className="shrink-0 p-6 pt-3 flex items-end gap-5">
+      {/* ── Topo fixo: back + header ── */}
+      <div className="shrink-0 border-b border-white/[0.04]">
 
-        {/* Cover */}
-        <div className="group relative w-28 h-28 rounded-xl overflow-hidden bg-surface-700 shrink-0 cursor-pointer" onClick={() => setEditingCover(e => !e)}>
-          {coverSrc
-            ? <img src={coverSrc} alt={playlist.name} className="w-full h-full object-cover" />
-            : <div className="w-full h-full flex items-center justify-center text-white/10">♫</div>
-          }
-          <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-            <Pencil size={18} className="text-white" />
+        {/* Back */}
+        <div className="px-5 pt-4 pb-0">
+          <button onClick={onBack} className="btn-ghost px-2 py-1.5 text-white/40 hover:text-white/80 flex items-center gap-1.5 text-xs">
+            <ArrowLeft size={13} /> Voltar para Playlists
+          </button>
+        </div>
+
+        {/* Hero */}
+        <div className="flex items-end gap-5 px-5 pt-4 pb-5">
+
+          {/* Cover */}
+          <div
+            className="group relative w-32 h-32 rounded-2xl overflow-hidden bg-surface-700 shrink-0 cursor-pointer shadow-2xl shadow-black/40"
+            onClick={() => setEditingCover(e => !e)}
+          >
+            {coverSrc
+              ? <img src={coverSrc} alt={playlist.name} className="w-full h-full object-cover" />
+              : <div className="w-full h-full flex items-center justify-center text-white/8 text-4xl">♫</div>
+            }
+            <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+              <Pencil size={16} className="text-white" />
+            </div>
+          </div>
+
+          {/* Cover edit popover */}
+          {editingCover && (
+            <div
+              className="absolute left-52 top-16 z-40 bg-surface-800 border border-white/10 rounded-2xl p-4 w-76 flex flex-col gap-2.5 shadow-2xl"
+              onClick={e => e.stopPropagation()}
+              style={{ width: '300px' }}
+            >
+              <p className="text-xs text-white/40 font-medium">Capa da playlist</p>
+              <input autoFocus value={coverInput} onChange={e => setCoverInput(e.target.value)}
+                className="input-base text-xs" placeholder="https://... ou file://..." />
+              <div className="flex gap-2">
+                <button onClick={handleChooseCoverFile} className="btn-ghost text-xs px-2.5 py-1.5 flex items-center gap-1">
+                  <Search size={10} /> Arquivo
+                </button>
+                <button onClick={() => window.electron?.playlists.searchImageBrowser(playlist.name)}
+                  className="btn-ghost text-xs px-2.5 py-1.5 flex items-center gap-1">
+                  <ExternalLink size={10} /> Google
+                </button>
+              </div>
+              <div className="flex gap-2 justify-end pt-1">
+                <button onClick={() => setEditingCover(false)} className="btn-ghost text-xs px-3 py-1.5">Cancelar</button>
+                <button onClick={handleCoverSave} className="btn-primary text-xs px-3 py-1.5">Salvar</button>
+              </div>
+            </div>
+          )}
+
+          {/* Meta + actions */}
+          <div className="flex-1 min-w-0 flex flex-col gap-3">
+            <div>
+              <p className="text-[10px] text-white/25 uppercase tracking-[0.15em] font-semibold mb-1">Playlist</p>
+              <h1 className="text-2xl font-black text-white tracking-tight truncate leading-tight">{playlist.name}</h1>
+              <div className="flex items-center gap-2 mt-1 text-xs text-white/35">
+                <span>{tracks.length} faixa{tracks.length !== 1 ? 's' : ''}</span>
+                {totalDuration > 0 && <><span>·</span><span>{formatTotalDuration(totalDuration)}</span></>}
+                {missingTracks.length > 0 && (
+                  <button
+                    onClick={() => setShowMissing(true)}
+                    className="flex items-center gap-1 text-amber-400/80 hover:text-amber-400 transition-colors ml-1"
+                  >
+                    <DownloadCloud size={11} />
+                    {missingTracks.length} sem arquivo
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Action row */}
+            <div className="flex items-center gap-2">
+              {/* Primary */}
+              <button onClick={handlePlayAll} disabled={!tracks.length}
+                className="btn-primary flex items-center gap-2 text-sm px-5 py-2.5 disabled:opacity-40">
+                <Play size={14} fill="white" /> Reproduzir
+              </button>
+              <button onClick={handleShuffle} disabled={!tracks.length}
+                className="btn-ghost flex items-center gap-2 text-sm px-4 py-2.5 disabled:opacity-40">
+                <Shuffle size={14} /> Aleatório
+              </button>
+
+              {/* Separator */}
+              <div className="w-px h-6 bg-white/10 mx-1" />
+
+              {/* Secondary icon bar */}
+              <div className="flex items-center gap-0.5">
+                <IconBtn title="Equalizar playlist" onClick={() => setShowEqualize(true)} disabled={tracks.length < 2}>
+                  <SlidersHorizontal size={15} />
+                </IconBtn>
+                <IconBtn title="Adicionar faixas" onClick={() => setShowAdd(true)}>
+                  <Plus size={15} />
+                </IconBtn>
+                <IconBtn title="Exportar playlist" onClick={handleExport} disabled={exporting || !tracks.length}>
+                  {exporting ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
+                </IconBtn>
+                <IconBtn title="Criar no YouTube" onClick={() => setShowYoutubeExport(true)} disabled={!tracks.length}>
+                  <Youtube size={15} />
+                </IconBtn>
+                <IconBtn
+                  title={groupsEnabled ? 'Grupos ativados' : 'Ativar grupos de sequência'}
+                  onClick={handleToggleGroups}
+                  active={groupsEnabled}
+                >
+                  <Tag size={15} />
+                </IconBtn>
+              </div>
+            </div>
           </div>
         </div>
 
-        {editingCover && (
-          <div className="absolute left-48 top-14 z-40 bg-surface-800 border border-white/10 rounded-xl p-4 w-80 flex flex-col gap-2 shadow-2xl" onClick={e => e.stopPropagation()}>
-            <p className="text-xs text-white/50 font-medium">URL ou caminho da capa</p>
-            <input autoFocus value={coverInput} onChange={e => setCoverInput(e.target.value)} className="input-base text-xs" placeholder="https://... ou file://..." />
-            <div className="flex gap-2">
-              <button onClick={handleChooseCoverFile} className="btn-ghost text-xs px-2 py-1 flex items-center gap-1">
-                <Search size={10} /> Arquivo
-              </button>
-              <button onClick={() => window.electron?.playlists.searchImageBrowser(playlist.name)} className="btn-ghost text-xs px-2 py-1 flex items-center gap-1">
-                <ExternalLink size={10} /> Google
-              </button>
-            </div>
-            <div className="flex gap-2 justify-end">
-              <button onClick={() => setEditingCover(false)} className="btn-ghost text-xs px-3 py-1">Cancelar</button>
-              <button onClick={handleCoverSave} className="btn-primary text-xs px-3 py-1">Salvar</button>
+        {/* Groups panel — only when enabled */}
+        {groupsEnabled && (
+          <div className="px-5 pb-4">
+            <div className="bg-surface-800/60 border border-white/6 rounded-xl px-4 py-3 flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Tag size={11} className="text-brand-400" />
+                  <span className="text-xs font-semibold text-brand-300">Grupos de sequência</span>
+                  <div className="flex flex-wrap gap-1 ml-1">
+                    {groups.map(g => (
+                      <span
+                        key={g.id}
+                        className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border"
+                        style={{ borderColor: g.color + '40', backgroundColor: g.color + '15', color: g.color }}
+                      >
+                        <span className="w-1 h-1 rounded-full" style={{ backgroundColor: g.color }} />
+                        {g.name}
+                        <span className="opacity-40">{tracks.filter(t => t.group_id === g.id).length}</span>
+                        {showGroupPanel && (
+                          <button onClick={() => handleDeleteGroup(g.id)} className="opacity-50 hover:opacity-100 ml-0.5">
+                            <X size={9} />
+                          </button>
+                        )}
+                      </span>
+                    ))}
+                    {groups.length === 0 && <span className="text-[10px] text-white/20">Nenhum grupo</span>}
+                  </div>
+                </div>
+                <button onClick={() => setShowGroupPanel(p => !p)} className="text-[10px] text-white/30 hover:text-white/60 transition-colors">
+                  {showGroupPanel ? 'Fechar ↑' : 'Gerenciar ↓'}
+                </button>
+              </div>
+              {showGroupPanel && (
+                <div className="flex gap-2 pt-1">
+                  <input
+                    value={newGroupName}
+                    onChange={e => setNewGroupName(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleCreateGroup()}
+                    placeholder="Nome do novo grupo..."
+                    className="input-base flex-1 text-xs py-1.5"
+                  />
+                  <button onClick={handleCreateGroup} disabled={!newGroupName.trim()}
+                    className="btn-primary px-3 text-xs disabled:opacity-40 flex items-center gap-1">
+                    <Plus size={11} /> Criar
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}
 
-        <div className="flex-1 min-w-0 mt-2">
-          <p className="text-xs text-white/30 uppercase tracking-wider mb-1">Playlist</p>
-          <h1 className="text-2xl font-bold text-white truncate">{playlist.name}</h1>
-          <p className="text-sm text-white/40 mt-1">
-            {tracks.length} faixa{tracks.length !== 1 ? 's' : ''}
-            {tracks.length > 0 && (
-              <span className="ml-2 text-white/25">· {formatTotalDuration(tracks.reduce((s, t) => s + (t.duration || 0), 0))}</span>
+        {/* Search */}
+        <div className="px-5 pb-4">
+          <div className="relative">
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/25 pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Buscar na playlist..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="input-base w-full pl-9 text-sm"
+            />
+            {search && (
+              <button onClick={() => setSearch('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/25 hover:text-white/60 transition-colors">
+                <X size={13} />
+              </button>
             )}
-          </p>
-
-          <div className="flex items-center gap-2 mt-4">
-            <button onClick={handlePlayAll} disabled={!tracks.length} className="btn-primary flex items-center gap-2 text-sm px-4 py-2 disabled:opacity-40">
-              <Play size={14} fill="white" /> Reproduzir
-            </button>
-            <button onClick={handleShuffle} disabled={!tracks.length} className="btn-ghost flex items-center gap-2 text-sm px-4 py-2 disabled:opacity-40">
-              <Shuffle size={14} /> Aleatório
-            </button>
-            <button onClick={() => setShowEqualize(true)} disabled={tracks.length < 2} className="btn-ghost flex items-center gap-2 text-sm px-4 py-2 disabled:opacity-40">
-              <SlidersHorizontal size={14} /> Equalizar
-            </button>
-            <button onClick={() => setShowAdd(true)} className="btn-ghost flex items-center gap-2 text-sm px-4 py-2">
-              <Plus size={14} /> Adicionar
-            </button>
-            <button onClick={handleExport} disabled={exporting || !tracks.length} className="btn-ghost flex items-center gap-2 text-sm px-4 py-2 disabled:opacity-40" title="Exportar playlist">
-              <Download size={14} /> {exporting ? 'Exportando...' : 'Exportar'}
-            </button>
-            <button onClick={() => setShowYoutubeExport(true)} disabled={!tracks.length} className="btn-ghost flex items-center gap-2 text-sm px-4 py-2 disabled:opacity-40" title="Criar playlist no YouTube">
-              <Youtube size={14} /> YouTube
-            </button>
-            <button
-              onClick={handleToggleGroups}
-              className={`flex items-center gap-2 text-sm px-4 py-2 rounded-lg transition-colors ${
-                groupsEnabled
-                  ? 'bg-brand-600/20 border border-brand-500/40 text-brand-300 hover:bg-brand-600/30'
-                  : 'btn-ghost text-white/60'
-              }`}
-              title={groupsEnabled ? 'Grupos ativados — clique para desativar' : 'Ativar grupos de sequência'}
-            >
-              <Tag size={14} /> Grupos{groupsEnabled ? ' ●' : ''}
-            </button>
-            {(() => {
-              const missing = tracks.filter(t => !t.file_path)
-              return missing.length > 0 ? (
-                <button
-                  onClick={() => setShowMissing(true)}
-                  className="flex items-center gap-2 text-sm px-4 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 hover:bg-amber-500/20 transition-colors"
-                >
-                  <DownloadCloud size={14} /> Baixar faltantes ({missing.length})
-                </button>
-              ) : null
-            })()}
           </div>
         </div>
       </div>
 
       {/* Export toast */}
       {exportToast && (
-        <div className="fixed bottom-24 right-6 z-50 px-4 py-2.5 rounded-xl text-sm shadow-xl bg-green-600/90 text-white">
+        <div className="fixed bottom-6 right-6 z-50 px-4 py-2.5 rounded-xl text-sm shadow-2xl bg-green-700/95 text-white slide-up">
           {exportToast}
         </div>
       )}
 
-      {/* Groups panel */}
-      {groupsEnabled && (
-        <div className="px-6 pb-3 shrink-0">
-          <div className="bg-surface-700/50 border border-white/8 rounded-xl p-3 flex flex-col gap-2.5">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-medium text-brand-300 flex items-center gap-1.5">
-                <Tag size={11} /> Grupos de sequência
-              </p>
-              <button
-                onClick={() => setShowGroupPanel(p => !p)}
-                className="text-xs text-white/40 hover:text-white/70 transition-colors"
-              >
-                {showGroupPanel ? 'Fechar ↑' : 'Gerenciar ↓'}
-              </button>
-            </div>
-
-            {/* Group chips */}
-            <div className="flex flex-wrap gap-1.5">
-              {groups.map(g => (
-                <div
-                  key={g.id}
-                  className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border"
-                  style={{ borderColor: g.color + '50', backgroundColor: g.color + '18', color: g.color }}
-                >
-                  <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: g.color }} />
-                  <span>{g.name}</span>
-                  <span className="text-white/30 ml-0.5">
-                    {tracks.filter(t => t.group_id === g.id).length}
-                  </span>
-                  {showGroupPanel && (
-                    <button
-                      onClick={() => handleDeleteGroup(g.id)}
-                      className="ml-0.5 opacity-50 hover:opacity-100 transition-opacity"
-                    >
-                      <X size={10} />
-                    </button>
-                  )}
-                </div>
-              ))}
-              {groups.length === 0 && (
-                <p className="text-xs text-white/25 py-0.5">Nenhum grupo criado</p>
-              )}
-            </div>
-
-            {/* Create group input — only when panel is open */}
-            {showGroupPanel && (
-              <div className="flex gap-2 pt-0.5">
-                <input
-                  value={newGroupName}
-                  onChange={e => setNewGroupName(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleCreateGroup()}
-                  placeholder="Nome do novo grupo..."
-                  className="input-base flex-1 text-xs py-1.5"
-                />
-                <button
-                  onClick={handleCreateGroup}
-                  disabled={!newGroupName.trim()}
-                  className="btn-primary px-3 text-xs disabled:opacity-40 flex items-center gap-1"
-                >
-                  <Plus size={12} /> Criar
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Search bar */}
-      <div className="px-6 pb-3 shrink-0">
-        <div className="relative">
-          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
-          <input
-            type="text"
-            placeholder="Buscar na playlist..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="input-base w-full pl-8 text-sm"
-          />
-        </div>
-      </div>
-
-      {/* Track list */}
-      <div className="flex-1 overflow-y-auto mx-6 mb-6 rounded-2xl wallpaper-panel p-2">
+      {/* ── Track list ── */}
+      <div className="flex-1 overflow-y-auto px-3 py-2">
         {tracks.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-white/20 gap-3">
             <p className="text-sm">Playlist vazia</p>

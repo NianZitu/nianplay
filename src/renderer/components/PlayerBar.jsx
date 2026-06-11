@@ -1,5 +1,8 @@
 import React, { useRef, useState } from 'react'
-import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, Shuffle, ListMusic, X } from 'lucide-react'
+import {
+  Play, Pause, SkipBack, SkipForward,
+  Volume2, VolumeX, Shuffle, ListMusic, X, Music2,
+} from 'lucide-react'
 import { usePlayer } from '../store/PlayerContext'
 
 function formatTime(secs) {
@@ -9,59 +12,72 @@ function formatTime(secs) {
   return `${m}:${s}`
 }
 
+function CoverImg({ track, size = 'sm' }) {
+  const dim = size === 'lg' ? 'w-10 h-10' : 'w-8 h-8'
+  if (!track?.cover_path) {
+    return (
+      <div className={`${dim} rounded-lg bg-surface-600 flex items-center justify-center text-white/20 shrink-0`}>
+        <Music2 size={14} />
+      </div>
+    )
+  }
+  const src = /^https?:\/\//.test(track.cover_path)
+    ? track.cover_path
+    : `file://${track.cover_path}`
+  return (
+    <img src={src} alt="" className={`${dim} rounded-lg object-cover shrink-0`} />
+  )
+}
+
 function QueuePanel({ onClose }) {
   const { upcomingItems, currentTrack, shuffle, playQueueIndex } = usePlayer()
 
   return (
-    <div className="absolute bottom-full right-0 mb-2 w-80 bg-surface-800 border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
-        <span className="text-sm font-semibold text-white">
-          Fila {shuffle ? '(aleatório)' : ''}
-        </span>
-        <button onClick={onClose} className="btn-ghost p-1 text-white/40"><X size={14} /></button>
+    <div className="absolute bottom-full right-0 mb-2.5 w-80 bg-surface-800 border border-white/10
+                    rounded-2xl shadow-2xl shadow-black/50 overflow-hidden z-50 slide-up">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-white/6">
+        <div>
+          <span className="text-sm font-bold text-white/90">Fila</span>
+          {shuffle && <span className="ml-2 badge badge-brand">Aleatório</span>}
+        </div>
+        <button onClick={onClose} className="btn-ghost p-1 text-white/35">
+          <X size={13} />
+        </button>
       </div>
 
       {currentTrack && (
-        <div className="px-4 py-2.5 border-b border-white/5 bg-brand-600/10">
-          <p className="text-xs text-brand-400 mb-1 uppercase tracking-wider font-medium">Tocando agora</p>
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded overflow-hidden bg-surface-600 shrink-0">
-              {currentTrack.cover_path
-                ? <img src={/^https?:\/\//.test(currentTrack.cover_path) ? currentTrack.cover_path : `file://${currentTrack.cover_path}`} className="w-full h-full object-cover" />
-                : <div className="w-full h-full flex items-center justify-center text-white/20">♪</div>
-              }
-            </div>
+        <div className="px-4 py-3 border-b border-white/6 bg-brand-600/8">
+          <p className="text-[10px] text-brand-500 mb-2 uppercase tracking-widest font-bold">Tocando agora</p>
+          <div className="flex items-center gap-3">
+            <CoverImg track={currentTrack} />
             <div className="overflow-hidden">
-              <p className="text-sm text-white truncate">{currentTrack.title}</p>
+              <p className="text-sm font-semibold text-white truncate">{currentTrack.title}</p>
               <p className="text-xs text-white/40 truncate">{currentTrack.artist}</p>
             </div>
           </div>
         </div>
       )}
 
-      <div className="overflow-y-auto max-h-72">
+      <div className="overflow-y-auto max-h-64">
         {upcomingItems.length === 0 ? (
-          <p className="text-center text-white/20 text-xs py-6">Fila vazia</p>
+          <div className="flex items-center justify-center py-8 text-white/20 text-xs">
+            Fila vazia
+          </div>
         ) : (
           upcomingItems.slice(0, 30).map(({ track, queueIndex }, i) => (
-            <div
+            <button
               key={`${track.id}-${i}`}
               onClick={() => playQueueIndex(queueIndex)}
-              className="flex items-center gap-2.5 px-4 py-2 hover:bg-white/5 cursor-pointer group"
+              className="flex items-center gap-3 w-full px-4 py-2.5 hover:bg-white/5 transition-colors text-left group"
               title="Tocar agora"
             >
-              <span className="text-xs text-white/20 w-4 shrink-0">{i + 1}</span>
-              <div className="w-7 h-7 rounded overflow-hidden bg-surface-600 shrink-0">
-                {track.cover_path
-                  ? <img src={/^https?:\/\//.test(track.cover_path) ? track.cover_path : `file://${track.cover_path}`} className="w-full h-full object-cover" />
-                  : <div className="w-full h-full flex items-center justify-center text-white/20 text-xs">♪</div>
-                }
-              </div>
+              <span className="text-xs text-white/20 w-5 shrink-0 text-right">{i + 1}</span>
+              <CoverImg track={track} />
               <div className="flex-1 overflow-hidden">
-                <p className="text-xs text-white truncate">{track.title}</p>
-                <p className="text-xs text-white/40 truncate">{track.artist}</p>
+                <p className="text-xs font-medium text-white truncate">{track.title}</p>
+                <p className="text-xs text-white/35 truncate">{track.artist}</p>
               </div>
-            </div>
+            </button>
           ))
         )}
       </div>
@@ -103,97 +119,153 @@ export default function PlayerBar({ onOpenNowPlaying }) {
   }
 
   const displayProgress = dragging ? dragProgress : progress
+  const coverSrc = currentTrack?.cover_path
+    ? (/^https?:\/\//.test(currentTrack.cover_path) ? currentTrack.cover_path : `file://${currentTrack.cover_path}`)
+    : null
 
   return (
-    <div className="h-20 m-3 mt-0 rounded-2xl bg-surface-800/90 border border-white/10 backdrop-blur-md flex items-center px-4 gap-4 shrink-0 relative shadow-xl shadow-black/20">
-      {/* Cover + track info */}
-      <div className="flex items-center gap-3 w-64 shrink-0">
-        <div className="w-12 h-12 rounded-lg overflow-hidden bg-surface-600 shrink-0">
-          {currentTrack?.cover_path
-            ? <img src={/^https?:\/\//.test(currentTrack.cover_path) ? currentTrack.cover_path : `file://${currentTrack.cover_path}`} alt="cover" className="w-full h-full object-cover" />
-            : <div className="w-full h-full flex items-center justify-center text-white/20 text-xl">♪</div>
+    <div className="h-[72px] m-2.5 mt-0 rounded-2xl shrink-0 relative
+                    bg-surface-800/98 border border-white/6 backdrop-blur-md
+                    shadow-2xl shadow-black/40
+                    flex items-center px-4 gap-3">
+
+      {/* Capa + info da faixa */}
+      <div className="flex items-center gap-3 w-60 shrink-0">
+        <div className="w-11 h-11 rounded-xl overflow-hidden bg-surface-600 shrink-0 shadow-md shadow-black/30">
+          {coverSrc
+            ? <img src={coverSrc} alt="capa" className="w-full h-full object-cover" />
+            : <div className="w-full h-full flex items-center justify-center text-white/15">
+                <Music2 size={18} />
+              </div>
           }
         </div>
         {currentTrack ? (
-          <div
-            className="overflow-hidden cursor-pointer group"
-            onClick={() => currentTrack && onOpenNowPlaying?.()}
+          <button
+            className="overflow-hidden text-left group"
+            onClick={() => onOpenNowPlaying?.()}
             title="Ver agora tocando"
           >
-            <p className="text-sm font-medium text-white truncate group-hover:text-brand-300 transition-colors">{currentTrack.title}</p>
-            <p className="text-xs text-white/40 truncate">{currentTrack.artist}</p>
-          </div>
+            <p className="text-sm font-semibold text-white/90 truncate group-hover:text-brand-400 transition-colors leading-tight">
+              {currentTrack.title}
+            </p>
+            <p className="text-xs text-white/35 truncate leading-tight mt-0.5">
+              {currentTrack.artist}
+            </p>
+          </button>
         ) : (
-          <p className="text-sm text-white/30">Nenhuma faixa</p>
+          <span className="text-sm text-white/20">Nenhuma faixa</span>
         )}
       </div>
 
-      {/* Center controls */}
-      <div className="flex flex-col items-center gap-1.5 flex-1">
-        <div className="flex items-center gap-4">
+      {/* Controles centrais */}
+      <div className="flex flex-col items-center gap-1 flex-1 min-w-0">
+        {/* Botões */}
+        <div className="flex items-center gap-3">
           <button
             onClick={() => setShuffle(s => !s)}
-            className={`btn-ghost p-1 transition-colors ${shuffle ? 'text-brand-400' : 'text-white/30 hover:text-white/60'}`}
+            className={`p-1.5 rounded-lg transition-all ${
+              shuffle
+                ? 'text-brand-400 bg-brand-600/15'
+                : 'text-white/25 hover:text-white/55 hover:bg-white/5'
+            }`}
             title="Modo aleatório"
           >
-            <Shuffle size={15} />
+            <Shuffle size={14} />
           </button>
-          <button onClick={skipPrev} className="btn-ghost p-1" disabled={!currentTrack}>
-            <SkipBack size={18} />
+
+          <button
+            onClick={skipPrev}
+            disabled={!currentTrack}
+            className="p-1.5 rounded-lg text-white/50 hover:text-white hover:bg-white/5
+                       disabled:opacity-25 transition-all"
+          >
+            <SkipBack size={17} />
           </button>
+
           <button
             onClick={togglePlay}
             disabled={!currentTrack}
-            className="w-10 h-10 rounded-full bg-brand-600 hover:bg-brand-500 flex items-center justify-center transition-all active:scale-95 disabled:opacity-30"
+            className="w-9 h-9 rounded-full bg-brand-600 hover:bg-brand-500 flex items-center justify-center
+                       transition-all active:scale-90 disabled:opacity-25 shadow-md shadow-black/30
+                       shadow-brand-600/20"
           >
-            {isPlaying ? <Pause size={18} fill="white" /> : <Play size={18} fill="white" className="ml-0.5" />}
+            {isPlaying
+              ? <Pause size={16} fill="white" className="text-white" />
+              : <Play  size={16} fill="white" className="text-white ml-0.5" />
+            }
           </button>
-          <button onClick={skipNext} className="btn-ghost p-1" disabled={!currentTrack}>
-            <SkipForward size={18} />
+
+          <button
+            onClick={skipNext}
+            disabled={!currentTrack}
+            className="p-1.5 rounded-lg text-white/50 hover:text-white hover:bg-white/5
+                       disabled:opacity-25 transition-all"
+          >
+            <SkipForward size={17} />
           </button>
+
+          <div className="w-7" /> {/* espaçador simétrico */}
         </div>
 
-        {/* Progress bar */}
+        {/* Barra de progresso */}
         <div
-          className="flex items-center gap-2 w-full max-w-lg"
+          className="flex items-center gap-2 w-full max-w-md"
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}
         >
-          <span className="text-xs text-white/30 w-8 text-right">{formatTime(displayProgress * duration)}</span>
+          <span className="text-[10px] text-white/25 w-8 text-right tabular-nums">
+            {formatTime(displayProgress * duration)}
+          </span>
+
           <div
             ref={progressRef}
             onMouseDown={handleMouseDown}
-            className={`flex-1 h-1.5 bg-white/10 rounded-full group relative select-none ${currentTrack ? 'cursor-pointer' : 'cursor-default'}`}
+            className={`flex-1 h-1 bg-white/10 rounded-full group relative select-none
+                        ${currentTrack ? 'cursor-pointer' : 'cursor-default'}`}
           >
             <div
-              className={`h-full bg-brand-500 rounded-full relative ${dragging ? '' : 'transition-all'}`}
+              className={`h-full bg-brand-500 rounded-full relative ${dragging ? '' : 'transition-all duration-200'}`}
               style={{ width: `${displayProgress * 100}%` }}
             >
-              <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow" />
+              <div className="absolute right-0 top-1/2 -translate-y-1/2 w-2.5 h-2.5
+                              bg-white rounded-full opacity-0 group-hover:opacity-100
+                              transition-opacity shadow-sm" />
             </div>
           </div>
-          <span className="text-xs text-white/30 w-8">{formatTime(duration)}</span>
+
+          <span className="text-[10px] text-white/25 w-8 tabular-nums">
+            {formatTime(duration)}
+          </span>
         </div>
       </div>
 
-      {/* Volume + queue */}
-      <div className="flex items-center gap-2 w-44 justify-end shrink-0 relative">
-        <button onClick={() => setVolume(volume > 0 ? 0 : 0.8)} className="btn-ghost p-1">
-          {volume === 0 ? <VolumeX size={16} /> : <Volume2 size={16} />}
+      {/* Volume + fila */}
+      <div className="flex items-center gap-1.5 w-44 justify-end shrink-0 relative">
+        <button
+          onClick={() => setVolume(volume > 0 ? 0 : 0.8)}
+          className="p-1.5 rounded-lg text-white/35 hover:text-white/70 hover:bg-white/5 transition-all"
+        >
+          {volume === 0 ? <VolumeX size={15} /> : <Volume2 size={15} />}
         </button>
+
         <input
           type="range" min="0" max="1" step="0.01"
           value={volume}
           onChange={e => setVolume(parseFloat(e.target.value))}
-          className="w-20 accent-brand-500 cursor-pointer"
+          className="w-20 cursor-pointer"
         />
+
         <button
           onClick={() => setShowQueue(q => !q)}
-          className={`btn-ghost p-1 transition-colors ${showQueue ? 'text-brand-400' : 'text-white/30 hover:text-white/60'}`}
+          className={`p-1.5 rounded-lg transition-all ${
+            showQueue
+              ? 'text-brand-400 bg-brand-600/15'
+              : 'text-white/35 hover:text-white/65 hover:bg-white/5'
+          }`}
           title="Fila de reprodução"
         >
-          <ListMusic size={16} />
+          <ListMusic size={15} />
         </button>
 
         {showQueue && <QueuePanel onClose={() => setShowQueue(false)} />}

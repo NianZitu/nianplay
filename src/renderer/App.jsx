@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import TitleBar           from './components/TitleBar'
-import Sidebar            from './components/Sidebar'
-import PlayerBar          from './components/PlayerBar'
+import NavRail            from './components/NavRail'
+import StudioPanel        from './components/StudioPanel'
 import NowPlayingModal    from './components/NowPlayingModal'
 import UpdateBanner       from './components/UpdateBanner'
 import LibraryPage        from './pages/LibraryPage'
@@ -91,18 +91,24 @@ export default function App() {
       <PlayerProvider>
         <div className={`relative flex flex-col h-screen w-screen overflow-hidden bg-surface-900 ${wallpaper?.src ? 'has-wallpaper' : ''}`}>
           <WallpaperLayer wallpaper={wallpaper} />
+
           <div className="relative z-10 flex flex-col h-full min-h-0">
             <TitleBar />
             <UpdateBanner />
-            <div className="flex flex-1 overflow-hidden">
-              <Sidebar activePage={activePage} onNavigate={setActivePage} />
-              <main className="flex-1 overflow-hidden">
+
+            {/* 3-column studio layout */}
+            <div className="flex flex-1 overflow-hidden min-h-0">
+              <NavRail activePage={activePage} onNavigate={setActivePage} />
+
+              <main className="flex-1 overflow-hidden min-w-0">
                 {renderPage()}
               </main>
+
+              <StudioPanel onOpenFullscreen={() => setShowNowPlaying(true)} />
             </div>
-            <PlayerBar onOpenNowPlaying={() => setShowNowPlaying(true)} />
-            {showNowPlaying && <NowPlayingModal onClose={() => setShowNowPlaying(false)} />}
           </div>
+
+          {showNowPlaying && <NowPlayingModal onClose={() => setShowNowPlaying(false)} />}
         </div>
       </PlayerProvider>
     </AuthProvider>

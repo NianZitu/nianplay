@@ -1,5 +1,15 @@
 export const UPDATE_LOGS = [
   {
+    version: '1.1.19',
+    title: 'Nova identidade visual',
+    date: '11/06/2026',
+    changes: [
+      'Redesign completo da interface com nova navegacao, player, paineis, paginas e modais.',
+      'Melhora a hierarquia visual, a densidade das listas e a adaptacao da interface a diferentes tamanhos de janela.',
+      'Corrige o menu de opcoes das playlists para abrir acima das capas e dos demais conteudos.',
+    ],
+  },
+  {
     version: '1.1.18',
     title: 'Notas de atualizacao mais claras',
     date: '31/05/2026',
@@ -149,4 +159,3 @@ export function getUpdateLogByVersion(version) {
   if (!version) return null
   return UPDATE_LOGS.find(v => v.version === version) || null
 }
-
