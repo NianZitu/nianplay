@@ -171,7 +171,7 @@ export default function NavRail({ activePage, onNavigate }) {
       </aside>
 
       {showLogin && <LoginModal onClose={() => setShowLogin(false)} />}
-      {syncMenu  && <div className="fixed inset-0 z-[200]" onClick={() => setSyncMenu(false)} />}
+      {syncMenu  && <div className="fixed inset-0 z-40" onClick={() => setSyncMenu(false)} />}
     </>
   )
 }

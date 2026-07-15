@@ -1,5 +1,15 @@
 export const UPDATE_LOGS = [
   {
+    version: '1.1.20',
+    title: 'Correcao do player e nuvem',
+    date: '15/07/2026',
+    changes: [
+      'Corrige clique e arraste na timeline do player apos o redesign visual.',
+      'A busca de tempo agora continua funcionando mesmo quando o mouse sai da barra durante o arraste.',
+      'Corrige a camada do menu da conta para os botoes de enviar e baixar da nuvem voltarem a receber clique.',
+    ],
+  },
+  {
     version: '1.1.19',
     title: 'Nova identidade visual',
     date: '11/06/2026',

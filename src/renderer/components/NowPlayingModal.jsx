@@ -54,6 +54,8 @@ export default function NowPlayingModal({ onClose }) {
   const [freshTrack,    setFreshTrack]    = useState(null)
   const [coverError,    setCoverError]    = useState(false)
   const [showVinyl,     setShowVinyl]     = useState(false)
+  const [dragging,      setDragging]      = useState(false)
+  const [dragProgress,  setDragProgress]  = useState(0)
 
   useEffect(() => {
     if (!currentTrack?.id || !window.electron) return
@@ -74,10 +76,38 @@ export default function NowPlayingModal({ onClose }) {
   }
   const cover = buildCoverUrl(track.cover_path)
 
-  function handleProgressClick(e) {
+  function getProgressRatio(clientX) {
+    if (!progressRef.current) return 0
     const rect = progressRef.current.getBoundingClientRect()
-    seek(Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)))
+    return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
   }
+
+  function handleProgressMouseDown(e) {
+    e.preventDefault()
+    const ratio = getProgressRatio(e.clientX)
+    setDragging(true)
+    setDragProgress(ratio)
+  }
+
+  useEffect(() => {
+    if (!dragging) return
+
+    function handleMove(e) {
+      setDragProgress(getProgressRatio(e.clientX))
+    }
+
+    function handleUp(e) {
+      seek(getProgressRatio(e.clientX))
+      setDragging(false)
+    }
+
+    window.addEventListener('mousemove', handleMove)
+    window.addEventListener('mouseup', handleUp)
+    return () => {
+      window.removeEventListener('mousemove', handleMove)
+      window.removeEventListener('mouseup', handleUp)
+    }
+  }, [dragging, seek])
 
   async function handleChooseCover() {
     if (!window.electron) return
@@ -95,6 +125,8 @@ export default function NowPlayingModal({ onClose }) {
     setFreshTrack(prev => ({ ...prev, cover_path: raw }))
     setCoverInput('')
   }
+
+  const displayProgress = dragging ? dragProgress : progress
 
   return (
     <>
@@ -239,19 +271,19 @@ export default function NowPlayingModal({ onClose }) {
             <div className="w-full flex flex-col gap-1.5">
               <div
                 ref={progressRef}
-                onClick={handleProgressClick}
+                onMouseDown={handleProgressMouseDown}
                 className="w-full h-1 bg-white/10 rounded-full cursor-pointer group relative"
               >
                 <div
                   className="h-full bg-brand-500 rounded-full relative"
-                  style={{ width: `${progress * 100}%` }}
+                  style={{ width: `${displayProgress * 100}%` }}
                 >
                   <div className="absolute right-0 top-1/2 -translate-y-1/2 w-2.5 h-2.5 bg-white rounded-full
                                   opacity-0 group-hover:opacity-100 shadow transition-opacity" />
                 </div>
               </div>
               <div className="flex justify-between text-[10px] text-white/25 tabular-nums">
-                <span>{formatTime(progress * duration)}</span>
+                <span>{formatTime(displayProgress * duration)}</span>
                 <span>{formatTime(duration)}</span>
               </div>
             </div>

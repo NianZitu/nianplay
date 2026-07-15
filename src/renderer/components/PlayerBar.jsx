@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import {
   Play, Pause, SkipBack, SkipForward,
   Volume2, VolumeX, Shuffle, ListMusic, X, Music2,
@@ -97,12 +97,14 @@ export default function PlayerBar({ onOpenNowPlaying }) {
   const [dragProgress, setDragProgress] = useState(0)
 
   function getRatio(clientX) {
+    if (!progressRef.current) return 0
     const rect = progressRef.current.getBoundingClientRect()
     return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
   }
 
   function handleMouseDown(e) {
     if (!currentTrack) return
+    e.preventDefault()
     setDragging(true)
     setDragProgress(getRatio(e.clientX))
   }
@@ -117,6 +119,26 @@ export default function PlayerBar({ onOpenNowPlaying }) {
     seek(getRatio(e.clientX))
     setDragging(false)
   }
+
+  useEffect(() => {
+    if (!dragging) return
+
+    function handleWindowMove(e) {
+      setDragProgress(getRatio(e.clientX))
+    }
+
+    function handleWindowUp(e) {
+      seek(getRatio(e.clientX))
+      setDragging(false)
+    }
+
+    window.addEventListener('mousemove', handleWindowMove)
+    window.addEventListener('mouseup', handleWindowUp)
+    return () => {
+      window.removeEventListener('mousemove', handleWindowMove)
+      window.removeEventListener('mouseup', handleWindowUp)
+    }
+  }, [dragging, seek])
 
   const displayProgress = dragging ? dragProgress : progress
   const coverSrc = currentTrack?.cover_path
@@ -212,7 +234,6 @@ export default function PlayerBar({ onOpenNowPlaying }) {
           className="flex items-center gap-2 w-full max-w-md"
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
         >
           <span className="text-[10px] text-white/25 w-8 text-right tabular-nums">
             {formatTime(displayProgress * duration)}

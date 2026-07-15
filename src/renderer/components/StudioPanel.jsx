@@ -44,21 +44,52 @@ export default function StudioPanel({ onOpenFullscreen }) {
     volume, setVolume, queue, currentIdx, upcomingItems,
   } = usePlayer()
 
-  const [activeTab,   setActiveTab]   = useState('queue')
-  const [coverError,  setCoverError]  = useState(false)
-  const [showVolume,  setShowVolume]  = useState(false)
+  const [activeTab,    setActiveTab]    = useState('queue')
+  const [coverError,   setCoverError]   = useState(false)
+  const [showVolume,   setShowVolume]   = useState(false)
+  const [dragging,     setDragging]     = useState(false)
+  const [dragProgress, setDragProgress] = useState(0)
   const progressRef = useRef(null)
 
   useEffect(() => { setCoverError(false) }, [currentTrack?.id])
 
-  function handleProgressClick(e) {
-    if (!progressRef.current) return
+  function getProgressRatio(clientX) {
+    if (!progressRef.current) return 0
     const rect = progressRef.current.getBoundingClientRect()
-    seek(Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)))
+    return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
   }
 
+  function handleProgressMouseDown(e) {
+    if (!currentTrack) return
+    e.preventDefault()
+    const ratio = getProgressRatio(e.clientX)
+    setDragging(true)
+    setDragProgress(ratio)
+  }
+
+  useEffect(() => {
+    if (!dragging) return
+
+    function handleMove(e) {
+      setDragProgress(getProgressRatio(e.clientX))
+    }
+
+    function handleUp(e) {
+      seek(getProgressRatio(e.clientX))
+      setDragging(false)
+    }
+
+    window.addEventListener('mousemove', handleMove)
+    window.addEventListener('mouseup', handleUp)
+    return () => {
+      window.removeEventListener('mousemove', handleMove)
+      window.removeEventListener('mouseup', handleUp)
+    }
+  }, [dragging, seek])
+
   const cover = currentTrack ? buildCoverUrl(currentTrack.cover_path) : null
-  const pct   = (progress || 0) * 100
+  const displayProgress = dragging ? dragProgress : (progress || 0)
+  const pct   = displayProgress * 100
 
   // Full display queue: current track first, then upcoming (upcomingItems has correct queueIndex even in shuffle)
   const displayQueue = queue.length > 0
@@ -142,7 +173,7 @@ export default function StudioPanel({ onOpenFullscreen }) {
         <div className="flex flex-col gap-1">
           <div
             ref={progressRef}
-            onClick={handleProgressClick}
+            onMouseDown={handleProgressMouseDown}
             className="group relative w-full h-[3px] rounded-full cursor-pointer overflow-visible"
             style={{ background: 'rgba(255,255,255,0.06)' }}
           >
@@ -157,7 +188,7 @@ export default function StudioPanel({ onOpenFullscreen }) {
             />
           </div>
           <div className="flex justify-between text-[9px] text-white/20 tabular-nums">
-            <span>{formatTime((progress || 0) * (duration || 0))}</span>
+            <span>{formatTime(displayProgress * (duration || 0))}</span>
             <span>{formatTime(duration || 0)}</span>
           </div>
         </div>
