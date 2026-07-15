@@ -1,5 +1,14 @@
 export const UPDATE_LOGS = [
   {
+    version: '1.1.21',
+    title: 'Icone do aplicativo restaurado',
+    date: '15/07/2026',
+    changes: [
+      'Restaura o icone antigo do NianPlay no executavel e no instalador.',
+      'Gera a build com edicao de recursos do Windows ativada novamente.',
+    ],
+  },
+  {
     version: '1.1.20',
     title: 'Correcao do player e nuvem',
     date: '15/07/2026',
