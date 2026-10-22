@@ -3,88 +3,79 @@
 # Usage (after `npx vite build` + `npx electron-builder --win --publish never`):
 #   powershell -ExecutionPolicy Bypass -File release.ps1
 #
+# Requires the GitHub CLI logged in once: `gh auth login --web` (no token files needed).
+#
 # Publishes the same layout as the previous releases:
 #   body  = release-notes\<version>.md
 #   files = latest.yml, NianPlay-Setup-<v>.exe, NianPlay-Setup-<v>.exe.blockmap, NianPlay-<v>-portable.exe
 # (release.bat only uploaded the installer - without latest.yml the in-app updater can't see the version.)
-# Everything is checked BEFORE committing/pushing. The token comes from .release-token (git-ignored)
-# and is never printed.
+# Everything is checked BEFORE committing/pushing, and every step stops the script on failure.
+# Keep this file ASCII-only: Windows PowerShell 5.1 reads BOM-less files as ANSI.
 
 # 'Continue' on purpose: in Windows PowerShell 5.1 'Stop' aborts when git writes progress to stderr.
-# Every step checks its own result and throws on failure.
+# Each step checks its own exit code and calls Fail.
 $ErrorActionPreference = 'Continue'
 Set-Location $PSScriptRoot
+function Fail($msg) { Write-Host "ERROR: $msg"; exit 1 }
 
-$owner = 'NianZitu'
-$repo  = 'nianplay'
-$curl  = "$env:SystemRoot\System32\curl.exe"
-
+$repo    = 'NianZitu/nianplay'
 $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
 $tag     = "v$version"
 Write-Host "`n=== NianPlay Release | $tag ===`n"
 
-# -- 1. Pre-flight checks ----------------------------------------------------
+# -- 1. Pre-flight checks ------------------------------------------------------
+if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { Fail 'GitHub CLI (gh) not installed: winget install GitHub.cli' }
+gh auth status --hostname github.com *> $null
+if ($LASTEXITCODE -ne 0) { Fail 'gh is not logged in: run  gh auth login --web' }
+
 $notesFile = "release-notes\$version.md"
 $assets = [ordered]@{
-  'latest.yml'                            = 'dist-electron\latest.yml'
-  "NianPlay-Setup-$version.exe"           = "dist-electron\NianPlay Setup $version.exe"
-  "NianPlay-Setup-$version.exe.blockmap"  = "dist-electron\NianPlay Setup $version.exe.blockmap"
-  "NianPlay-$version-portable.exe"        = "dist-electron\NianPlay $version.exe"
+  'latest.yml'                           = 'dist-electron\latest.yml'
+  "NianPlay-Setup-$version.exe"          = "dist-electron\NianPlay Setup $version.exe"
+  "NianPlay-Setup-$version.exe.blockmap" = "dist-electron\NianPlay Setup $version.exe.blockmap"
+  "NianPlay-$version-portable.exe"       = "dist-electron\NianPlay $version.exe"
 }
-if (-not (Test-Path .release-token)) { throw '.release-token not found' }
-if (-not (Test-Path $notesFile))     { throw "Release notes not found: $notesFile" }
-foreach ($src in $assets.Values) { if (-not (Test-Path $src)) { throw "Missing build file: $src" } }
+if (-not (Test-Path $notesFile)) { Fail "Release notes not found: $notesFile" }
+foreach ($src in $assets.Values) { if (-not (Test-Path $src)) { Fail "Missing build file: $src" } }
 
 $latest = Get-Content 'dist-electron\latest.yml' -Raw
-if ($latest -notmatch "(?m)^version:\s*$([regex]::Escape($version))\s*$") { throw "latest.yml is not for $version - rebuild first" }
-if ($latest -notmatch "url:\s*NianPlay-Setup-$([regex]::Escape($version))\.exe") { throw 'latest.yml url does not match the installer asset name' }
+if ($latest -notmatch "(?m)^version:\s*$([regex]::Escape($version))\s*$") { Fail "latest.yml is not for $version - rebuild first" }
+if ($latest -notmatch "url:\s*NianPlay-Setup-$([regex]::Escape($version))\.exe") { Fail 'latest.yml url does not match the installer asset name' }
 
-$token = (Get-Content .release-token -Raw).Trim()
-$headers = @{ Authorization = "token $token"; 'User-Agent' = 'nianplay-release'; Accept = 'application/vnd.github+json' }
-
-# Tag must not exist yet
-$existing = $null
-try { $existing = Invoke-RestMethod -Uri "https://api.github.com/repos/$owner/$repo/releases/tags/$tag" -Headers $headers } catch {}
-if ($existing) { throw "Release $tag already exists on GitHub" }
+gh release view $tag --repo $repo *> $null
+if ($LASTEXITCODE -eq 0) { Fail "Release $tag already exists on GitHub" }
 Write-Host '[1/4] Checks OK'
 
-# -- 2. Commit + push ---------------------------------------------------------
+# -- 2. Commit + push ----------------------------------------------------------
 git add -A
 git diff --cached --quiet
-if ($LASTEXITCODE -ne 0) { git commit -m "Release $version"; if ($LASTEXITCODE -ne 0) { throw 'git commit failed' } }
+if ($LASTEXITCODE -ne 0) { git commit -m "Release $version"; if ($LASTEXITCODE -ne 0) { Fail 'git commit failed' } }
 git push origin main
-if ($LASTEXITCODE -ne 0) { throw 'git push failed' }
+if ($LASTEXITCODE -ne 0) { Fail 'git push failed' }
 Write-Host '[2/4] Code pushed'
 
-# -- 3. Create the release ----------------------------------------------------
-$body = @{
-  tag_name         = $tag
-  target_commitish = 'main'
-  name             = "NianPlay $version"
-  body             = (Get-Content $notesFile -Raw -Encoding UTF8)
-  draft            = $false
-  prerelease       = $false
-} | ConvertTo-Json -Compress
-$release = Invoke-RestMethod -Method Post -Uri "https://api.github.com/repos/$owner/$repo/releases" `
-  -Headers $headers -ContentType 'application/json; charset=utf-8' -Body ([Text.Encoding]::UTF8.GetBytes($body))
-Write-Host "[3/4] Release created (id $($release.id))"
-
-# -- 4. Upload files ----------------------------------------------------------
-# Auth header goes through a temp file (curl -H @file) so the token never shows in the process list
-$authFile = [IO.Path]::GetTempFileName()
-try {
-  [IO.File]::WriteAllText($authFile, "Authorization: token $token`n")
-  foreach ($name in $assets.Keys) {
-    $src = $assets[$name]
-    $type = if ($name -like '*.yml') { 'text/yaml' } else { 'application/octet-stream' }
-    Write-Host "      uploading $name ..."
-    $out = & $curl -sS --fail-with-body -X POST -H "@$authFile" -H "Content-Type: $type" -H 'User-Agent: nianplay-release' `
-      --data-binary "@$src" "https://uploads.github.com/repos/$owner/$repo/releases/$($release.id)/assets?name=$name"
-    if ($LASTEXITCODE -ne 0) { throw "Upload failed for $name : $out" }
-    $asset = $out | ConvertFrom-Json
-    Write-Host "      ok: $($asset.browser_download_url) ($([math]::Round($asset.size / 1MB, 1)) MB)"
-  }
-} finally {
-  Remove-Item $authFile -Force -ErrorAction SilentlyContinue
+# -- 3. Stage the files under their GitHub names (gh uses the file name) -------
+$stage = Join-Path ([IO.Path]::GetTempPath()) "nianplay-release-$version"
+Remove-Item $stage -Recurse -Force -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Path $stage | Out-Null
+$files = @()
+foreach ($name in $assets.Keys) {
+  $dest = Join-Path $stage $name
+  Copy-Item $assets[$name] $dest
+  $files += $dest
 }
-Write-Host "[4/4] Done: $($release.html_url)`n"
+Write-Host '[3/4] Files staged'
+
+# -- 4. Create the release with all files (gh uploads and fails as a whole) ----
+gh release create $tag @files --repo $repo --target main --title "NianPlay $version" --notes-file $notesFile
+if ($LASTEXITCODE -ne 0) { Fail 'gh release create failed - check the release page; a partial draft may need deleting' }
+Remove-Item $stage -Recurse -Force -ErrorAction SilentlyContinue
+
+# Verify what GitHub has
+$check = gh release view $tag --repo $repo --json assets,url | ConvertFrom-Json
+foreach ($name in $assets.Keys) {
+  $a = $check.assets | Where-Object { $_.name -eq $name }
+  if (-not $a) { Fail "Asset missing on GitHub: $name" }
+  Write-Host ("      ok: {0} ({1} MB)" -f $name, [math]::Round($a.size / 1MB, 1))
+}
+Write-Host "[4/4] Done: $($check.url)`n"
