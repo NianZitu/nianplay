@@ -65,8 +65,10 @@ liste faixas sem link e, com permissão, busque no YouTube até 3 opções para 
   clique, ordem correta (original > cover/nightcore), "Nenhum vídeo encontrado", Salvar desabilitado sem escolha,
   salva só a escolhida com link canônico, sem erros novos no console ✅
 - `vite build` ✅ · sintaxe main ✅
-- Instalador gerado ✅ `dist-electron\NianPlay Setup 1.1.26.exe` + portátil (não publicado; notas prontas em
-  `release-notes\1.1.26.md`). Pendente: teste do usuário no app instalado.
+- Instalador gerado ✅ `dist-electron\NianPlay Setup 1.1.26.exe` + portátil.
+- **Publicado ✅** (a pedido do usuário) https://github.com/NianZitu/nianplay/releases/tag/v1.1.26 — commit `9ed9285`.
+  Conferido pela API pública: é a "latest", 4 arquivos, `latest.yml` idêntico ao local, notas no topo.
+  O usuário autorizou a publicação sem relatar teste manual da 1.1.26 no app instalado.
 
 ### Observações / não feito
 - Faixas sem link que **não** vieram de downloads do app (≈180, adicionadas por escaneamento de arquivos de outras
