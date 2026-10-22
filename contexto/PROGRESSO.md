@@ -6,6 +6,76 @@ Cada entrada: versão, data, o que mudou, por quê, arquivos e status.
 
 ---
 
+## 1.1.26 — 22/10/2026 — Links das músicas corretos + "Verificar links"
+
+**Pedido do usuário:** músicas baixadas (mesmo depois da atualização que deveria salvar o link) vinham com link errado
+ou sem link, prejudicando sync da nuvem e "baixar playlist". Achar a causa e corrigir; e um botão nas playlists que
+liste faixas sem link e, com permissão, busque no YouTube até 3 opções para o usuário escolher.
+
+### Diagnóstico (dados reais: 305 faixas com arquivo, 191 sem link; 10 delas vinham de downloads do próprio app)
+1. **Aba Downloads (URL, busca YouTube, Spotify) nunca gravava o link na faixa.** `downloader:start` só baixava; o
+   `library:scan` posterior criava a faixa com `yt_url: ''`. O link ficava só em `downloads.json` (com `title` = nome do
+   1º arquivo intermediário, ex. `.webm`).
+2. **Aba Spotify associava por nome — a causa dos links ERRADOS.** Logo após iniciar o download, procurava na
+   biblioteca `title === nome` (ignorando artista) ou `title.includes(nome)` e gravava o link nela. O arquivo nem
+   existia ainda na biblioteca.
+3. **`startForTrack` / `linkDownloadedFile` (Baixar faixas faltantes) adivinhava o arquivo:** o mais recente da pasta
+   (últimos 5 min) com nome parecido → com downloads simultâneos ligava arquivos/links trocados; e rodava **mesmo
+   quando o download falhava** (`runDownload` resolvia em erro).
+4. **`youtube.js` (exportar para o YouTube)** copiava links do histórico para faixas com título ≥ 72% parecido.
+5. **Links comparados como texto exato** em todo o app: `youtu.be/ID`, `watch?v=ID&list=..`, `?si=` eram "links
+   diferentes" → caía no casamento por nome.
+6. Bônus: saída do yt-dlp lida como cp1252 e cortada entre chunks → nomes com acento corrompidos.
+
+### Correção
+- Novo `main/mediaUrl.js` (+ `renderer/utils/mediaUrl.js`, mesmas regras): `youtubeVideoId`, `canonicalUrl`
+  (`https://www.youtube.com/watch?v=ID`), `urlKey` (comparação), `isPlaylistUrl`.
+- `downloader.js`: yt-dlp roda com `--print before_dl:NIANPLAY_TITLE\t%(title)s`,
+  `--print after_move:NIANPLAY_FILE\t%(webpage_url)s\t%(filepath)s`, `--no-simulate`, `--encoding utf-8`
+  (+ `PYTHONIOENCODING`/`PYTHONUTF8`, `stdout.setEncoding('utf8')`). Cada vídeo vira `download.files = [{url, path}]`
+  (caminho FINAL, após conversão). Ao terminar: `linkFilesToLibrary` (faixas já existentes com aquele caminho).
+  `startForTrack` só liga em sucesso e liga o **arquivo exato** reportado (sem fallback por nome) e o link usado.
+- Novo `main/urlRepair.js` — `repairTrackUrls()` preenche `yt_url` vazio **só com evidência exata**: caminho
+  exato em `download.files`, ou (downloads antigos) nome de arquivo idêntico ao `title` registrado (sem extensão e sem
+  sufixo `.fNNN`) apontando para **um único** link de vídeo (playlists e ambíguos ignorados). Roda ao abrir o app,
+  após `library:scan` e no export para YouTube (substitui o casamento por 72%). `scanDirectory` já cria a faixa com o
+  link do histórico.
+- Comparação por `urlKey` em `trackMatch.js` (findTrackMatch/TrackIndex), `library:importVirtualTrack`,
+  `AuthContext` (findTrackMatch, localUrlSet); gravação canônica em `library:updateTrack`, imports de playlist,
+  faixas virtuais, upload para a nuvem e `trackCloudId` (mesmo vídeo → mesmo id na nuvem).
+- Aba Spotify: removida a associação por nome (o link chega pelo histórico quando o arquivo entra na biblioteca).
+- **"Verificar links"** (botão 🔗 no detalhe da playlist, `LinkCheckModal` em `PlaylistDetailPage.jsx`): lista faixas
+  sem link ou com link inválido (link do YouTube sem vídeo, ex. playlist); busca **só após clique** (por faixa ou
+  todas, com "Parar"); até 3 candidatos por faixa (consultas "artista - título" → "título artista" → "título",
+  ordenados por `scoreYt`, com miniatura, canal, duração e diferença de duração colorida, selo "mais provável" se
+  score ≥ 0,6, botão para abrir no YouTube via novo IPC `app:openYoutube` que só aceita vídeos do YouTube); **nada
+  pré-selecionado**, "Nenhuma destas", salva só os escolhidos (`library:updateTrack` parcial) e atualiza lista e fila.
+
+### Testes
+- Lógica (Node, electron simulado): variantes de link → mesmo id/canônico/chave; playlist/outro site não viram vídeo;
+  url vence nome no casamento; reparo: caminho exato (case-insensitive) ✅, nome idêntico antigo ✅, ambíguo ✗,
+  playlist ✗, download com erro ✗, faixa que já tinha link intocada, **nome parecido ("Antiga Remix") ✗**;
+  `updateTrack` grava canônico; `importVirtualTrack` reconhece o mesmo vídeo em outro formato ✅ (6/6)
+- **Cópia dos dados reais:** reparo recupera **9 links** (115 → 124), todos de arquivos baixados pelo app
+  (Bopeebo, Dadbattle, Fresh, Tutorial…); 1 caso ambíguo deixado sem link.
+- **Download real (Electron + yt-dlp, pasta "Músicas #ção 100%")**: startForTrack liga o `.mp3` final exato e o link
+  canônico (entrada `youtu.be/..?si=`) ✅; download pela aba + escanear pasta → faixa nova já com link ✅; download que
+  falha não liga nenhum arquivo ✅; caminho com acento/#/% íntegro ✅
+- UI (navegador, dados simulados): 3 de 4 detectadas (inclui link de playlist como inválido), nenhuma busca antes do
+  clique, ordem correta (original > cover/nightcore), "Nenhum vídeo encontrado", Salvar desabilitado sem escolha,
+  salva só a escolhida com link canônico, sem erros novos no console ✅
+- `vite build` ✅ · sintaxe main ✅
+- Instalador gerado ✅ `dist-electron\NianPlay Setup 1.1.26.exe` + portátil (não publicado; notas prontas em
+  `release-notes\1.1.26.md`). Pendente: teste do usuário no app instalado.
+
+### Observações / não feito
+- Faixas sem link que **não** vieram de downloads do app (≈180, adicionadas por escaneamento de arquivos de outras
+  fontes) não têm como ser recuperadas automaticamente → usar "Verificar links".
+- A aba Spotify ainda associa a **letra** por nome parecido (mesmo padrão do bug do link). Não foi pedido; candidato a correção.
+- "Baixar faixas faltantes" sem link ainda usa sempre o 1º resultado da busca. Recomendação: rodar "Verificar links" antes.
+
+---
+
 ## Publicação da 1.1.25 + benchmark antes/depois — 22/10/2026
 
 **Pedido do usuário:** instalar o Git, publicar a release e colocar no log, com números, tudo o que mudou na otimização.

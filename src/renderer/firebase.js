@@ -1,6 +1,7 @@
 import { initializeApp }                                       from 'firebase/app'
 import { initializeAuth, indexedDBLocalPersistence, browserPopupRedirectResolver } from 'firebase/auth'
 import { getFirestore }                                         from 'firebase/firestore'
+import { canonicalUrl }                                         from './utils/mediaUrl'
 
 // ─── CONFIGURAÇÃO FIREBASE ───────────────────────────────────────────────────
 // 1. Acesse https://console.firebase.google.com
@@ -40,7 +41,8 @@ export function trackCloudId(track) {
   const title = (track.title || '').toLowerCase().trim()
   const artist = (track.artist || '').toLowerCase().trim()
   const album = (track.album || '').toLowerCase().trim()
-  const ytUrl = (track.yt_url || '').trim()
+  // canonical: the same video in any link format gets the same cloud id
+  const ytUrl = canonicalUrl(track.yt_url)
   const duration = Math.round(track.duration || 0)
   const filePath = (track.file_path || '').toLowerCase().trim()
   const key = ytUrl

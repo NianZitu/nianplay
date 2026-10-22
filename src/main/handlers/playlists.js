@@ -1,6 +1,7 @@
 const { v4: uuidv4 } = require('uuid')
 const { getDB } = require('../db')
 const { norm, TrackIndex } = require('../trackMatch')
+const { canonicalUrl } = require('../mediaUrl')
 const path = require('path')
 const fs   = require('fs')
 
@@ -67,7 +68,7 @@ function importPlaylistData(data, fallbackName = 'Playlist Importada') {
         gain:       imp.gain     || 0,
         cut_segments: normalizeCutSegments(imp.cut_segments),
         lyrics:     imp.lyrics   || '',
-        yt_url:     imp.yt_url   || '',
+        yt_url:     canonicalUrl(imp.yt_url),
         created_at: Date.now(),
         updated_at: Date.now(),
       }
@@ -76,7 +77,7 @@ function importPlaylistData(data, fallbackName = 'Playlist Importada') {
       created++
     } else {
       let changed = false
-      if (!match.yt_url && imp.yt_url)       { match.yt_url = imp.yt_url; index.noteUrl(match); changed = true }
+      if (!match.yt_url && imp.yt_url)       { match.yt_url = canonicalUrl(imp.yt_url); index.noteUrl(match); changed = true }
       if (!match.lyrics && imp.lyrics)       { match.lyrics = imp.lyrics; changed = true }
       if (!match.cover_path && imp.cover_url){ match.cover_path = imp.cover_url; changed = true }
       if (!match.gain && imp.gain)           { match.gain = imp.gain; changed = true }
@@ -566,7 +567,7 @@ module.exports = function registerPlaylistHandlers(ipcMain) {
           gain:       imp.gain     || 0,
           cut_segments: normalizeCutSegments(imp.cut_segments),
           lyrics:     imp.lyrics   || '',
-          yt_url:     imp.yt_url   || '',
+          yt_url:     canonicalUrl(imp.yt_url),
           created_at: Date.now(),
           updated_at: Date.now(),
         }
@@ -576,7 +577,7 @@ module.exports = function registerPlaylistHandlers(ipcMain) {
       } else {
         // Merge metadata missing from local track
         let changed = false
-        if (!match.yt_url && imp.yt_url)   { match.yt_url  = imp.yt_url;  index.noteUrl(match); changed = true }
+        if (!match.yt_url && imp.yt_url)   { match.yt_url  = canonicalUrl(imp.yt_url);  index.noteUrl(match); changed = true }
         if (!match.lyrics && imp.lyrics)   { match.lyrics  = imp.lyrics;  changed = true }
         if (!match.gain   && imp.gain)     { match.gain    = imp.gain;    changed = true }
         if ((!match.cut_segments || match.cut_segments.length === 0) && imp.cut_segments?.length) {

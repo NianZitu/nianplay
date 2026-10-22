@@ -5,11 +5,15 @@
 // TrackIndex gives the same answers in O(1) per lookup, for loops that match
 // many imported tracks against the whole library.
 
+const { urlKey } = require('./mediaUrl')
+
 const norm = s => (s || '').toLowerCase().trim()
 
+// Links are compared by urlKey: youtu.be/ID, watch?v=ID&list=... etc. are the same video
 function findTrackMatch(tracks, track) {
-  if (track.yt_url) {
-    const byUrl = tracks.find(t => t.yt_url && t.yt_url === track.yt_url)
+  const key = urlKey(track.yt_url)
+  if (key) {
+    const byUrl = tracks.find(t => urlKey(t.yt_url) === key)
     if (byUrl) return byUrl
   }
 
@@ -40,7 +44,7 @@ const titleArtistKey = t => `${norm(t.title)}\u0000${norm(t.artist)}`
 
 class TrackIndex {
   constructor(tracks) {
-    this.byUrl         = new Map() // yt_url → first track with it (Array.find semantics)
+    this.byUrl         = new Map() // urlKey(yt_url) → first track with it (Array.find semantics)
     this.byTitleArtist = new Map() // title+artist → tracks, in library order
     this.byTitle       = new Map() // title → tracks, in library order
     for (const t of tracks) this.add(t)
@@ -59,13 +63,15 @@ class TrackIndex {
 
   // Call after setting yt_url on a track that is already indexed
   noteUrl(track) {
-    if (track.yt_url && !this.byUrl.has(track.yt_url)) this.byUrl.set(track.yt_url, track)
+    const key = urlKey(track.yt_url)
+    if (key && !this.byUrl.has(key)) this.byUrl.set(key, track)
   }
 
   // Same result as findTrackMatch(tracks, track): every tier after the URL check
   // only considers tracks with identical title + artist, so it searches that group
   match(track) {
-    if (track.yt_url && this.byUrl.has(track.yt_url)) return this.byUrl.get(track.yt_url)
+    const key = urlKey(track.yt_url)
+    if (key && this.byUrl.has(key)) return this.byUrl.get(key)
 
     const group = this.byTitleArtist.get(titleArtistKey(track)) || []
     if (group.length === 0) return null

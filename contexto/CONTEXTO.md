@@ -30,6 +30,10 @@ src/main/                  Processo principal (Node/Electron)
                            gravação assíncrona com debounce (400 ms) + atômica (.tmp → rename); flushAllSync() ao fechar
   ytdlp-path.js            Caminho do binário yt-dlp
   trackMatch.js            findTrackMatch (regra de casamento de faixas) + TrackIndex (mesma regra, O(1) por busca)
+  mediaUrl.js              youtubeVideoId / canonicalUrl / urlKey — TODA comparação/gravação de link passa por aqui
+                           (cópia para o renderer em renderer/utils/mediaUrl.js — manter iguais)
+  urlRepair.js             repairTrackUrls(): preenche yt_url vazio a partir do histórico de downloads, só com
+                           evidência exata (caminho do arquivo; ou nome idêntico → um único vídeo)
   thumbnails.js            Miniaturas 96 px das capas (userData/thumbs) em segundo plano via nativeImage;
                            avisa a UI com o evento 'library:thumbsUpdated'
   handlers/                Um arquivo por domínio de IPC:
@@ -112,6 +116,10 @@ e `cover_thumb_src` (o `cover_path` de onde ela foi feita). A UI só usa a minia
 - O `Audio` do player tem `crossOrigin = 'anonymous'` (Web Audio + mídia de outra origem). Se mudar as origens da UI
   (porta 17654/5173), atualize as origens passadas a `handleMediaProtocol` em `main.js`.
 - Ao adicionar código que cria/troca capas no main, chame `scheduleThumbnails()` (de `thumbnails.js`).
+- **Links das músicas (yt_url):** nunca associar link a uma faixa por nome parecido. O downloader registra
+  `download.files = [{ url, path }]` com o caminho final exato (yt-dlp `--print after_move`); a faixa recebe o link
+  pelo caminho (`linkFilesToLibrary`, `startForTrack`, `scanDirectory`, `repairTrackUrls`). Comparar links com
+  `urlKey`, gravar com `canonicalUrl`. Para faixas sem evidência, o usuário escolhe em "Verificar links".
 - Casamento de faixas (imports/sync): use `findTrackMatch`/`TrackIndex` de `trackMatch.js`, não reimplemente.
   Ao acrescentar faixas à biblioteca durante um loop com `TrackIndex`, chame `index.add(t)`; ao definir `yt_url`
   numa faixa já indexada, `index.noteUrl(t)`.

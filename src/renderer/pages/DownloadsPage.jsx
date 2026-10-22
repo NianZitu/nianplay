@@ -414,17 +414,10 @@ function SpotifyTab({ ytdlpReady, outputDir }) {
       trackTitle: track.name, trackArtist: track.artist,
     })
     setQueued(prev => new Set(prev).add(track.query))
-    if (best.url && window.electron?.library) {
-      window.electron.library.getTracks().then(libTracks => {
-        if (!libTracks) return
-        const norm = s => (s || '').toLowerCase().trim()
-        const n = norm(track.name), a = norm(track.artist)
-        const match = libTracks.find(t =>
-          norm(t.title) === n || (norm(t.title).includes(n) && (!a || norm(t.artist) === a))
-        )
-        if (match && !match.yt_url) window.electron.library.updateTrack({ ...match, yt_url: best.url })
-      })
-    }
+    // The link is NOT copied to a library track here. This used to give it to any track whose
+    // title merely matched (artist ignored), i.e. often the wrong song — and the file being
+    // downloaded isn't in the library yet. The downloader records file → link, and the track
+    // gets it from that record when the file enters the library (main/urlRepair.js).
     if (fetchLyrics && format === 'audio' && window.electron?.lyrics) {
       window.electron.lyrics.fetch({ title: track.name, artist: track.artist }).then(res => {
         if (res?.lyrics) {

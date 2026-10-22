@@ -1,5 +1,19 @@
 export const UPDATE_LOGS = [
   {
+    version: '1.1.26',
+    title: 'Links das musicas corretos e verificacao de links',
+    date: '22/10/2026',
+    changes: [
+      'Corrige o link das musicas baixadas pela aba Downloads (link, busca do YouTube e Spotify), que se perdia ao adicionar o arquivo na biblioteca.',
+      'Corrige a aba Spotify, que podia salvar o link do YouTube na musica errada por ter um nome parecido.',
+      'Baixar faixas faltantes agora liga cada download ao arquivo exato, mesmo com varios downloads ao mesmo tempo, e nao liga nada se o download falhar.',
+      'O mesmo video escrito de formas diferentes (youtu.be, com playlist ou com ?si=) agora e reconhecido como o mesmo link ao sincronizar e importar.',
+      'Links perdidos de musicas baixadas pelo app sao recuperados automaticamente pelo historico de downloads.',
+      'Novo botao Verificar links nas playlists: mostra as faixas sem link e, se voce quiser, busca no YouTube ate 3 opcoes para voce escolher a certa.',
+      'Nomes de arquivo com acentos ficam corretos ao baixar.',
+    ],
+  },
+  {
     version: '1.1.25',
     title: 'Otimizacao completa: ate 45% menos memoria e metade da CPU',
     date: '22/10/2026',

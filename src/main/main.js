@@ -143,6 +143,13 @@ app.whenReady().then(async () => {
   await createWindow()
 
   ipcMain.handle('app:getVersion', () => app.getVersion())
+  // Opens a YouTube video in the user's browser (used to double-check a link before saving it)
+  ipcMain.handle('app:openYoutube', (_, url) => {
+    const id = require('./mediaUrl').youtubeVideoId(url)
+    if (!id) return false
+    require('electron').shell.openExternal(`https://www.youtube.com/watch?v=${id}`)
+    return true
+  })
 
   require('./db').initDB()
   require('./handlers/library')(ipcMain)
@@ -160,6 +167,9 @@ app.whenReady().then(async () => {
   require('./handlers/updater')(ipcMain, mainWindow)
 
   // Generate small cover thumbnails in the background; tell the UI when there are new ones
+  // Restore links lost by older versions (files downloaded by the app but scanned without link)
+  try { require('./urlRepair').repairTrackUrls() } catch (err) { console.error('[Links]', err.message) }
+
   require('./thumbnails').initThumbnails(() => {
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('library:thumbsUpdated')
   })

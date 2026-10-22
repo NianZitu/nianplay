@@ -4,6 +4,8 @@ const { v4: uuidv4 } = require('uuid')
 const { getDB } = require('../db')
 const { findTrackMatch } = require('../trackMatch')
 const { scheduleThumbnails } = require('../thumbnails')
+const { buildDownloadIndex, urlForFile, repairTrackUrls } = require('../urlRepair')
+const { canonicalUrl, urlKey } = require('../mediaUrl')
 
 const AUDIO_EXTENSIONS = new Set(['.mp3', '.flac', '.wav', '.aac', '.ogg', '.m4a', '.opus', '.wma'])
 
@@ -24,6 +26,8 @@ async function scanDirectory(dirPath) {
 
   const existingTracks = db.tracks.read()
   const existingPaths  = new Set(existingTracks.map(t => t.file_path))
+  // Files downloaded by the app keep the link they came from (exact file path match)
+  const downloadIndex  = buildDownloadIndex(db.downloads.read())
 
   const audioFiles = []
   function walk(dir) {
@@ -70,7 +74,7 @@ async function scanDirectory(dirPath) {
         gain:       0.0,
         cut_segments: [],
         lyrics:     '',
-        yt_url:     '',
+        yt_url:     urlForFile(filePath, downloadIndex),
         created_at: Date.now(),
         updated_at: Date.now(),
       })
@@ -91,6 +95,8 @@ module.exports = function registerLibraryHandlers(ipcMain) {
     if (!folderPath || !fs.existsSync(folderPath)) return { error: 'Invalid folder' }
     const result = await scanDirectory(folderPath)
     if (result.added) scheduleThumbnails()
+    // Tracks scanned before (without link) whose file came from an app download
+    repairTrackUrls()
     return result
   })
 
@@ -115,6 +121,8 @@ module.exports = function registerLibraryHandlers(ipcMain) {
     tracks[idx] = {
       ...tracks[idx],
       ...updated,
+      // Links are always stored in canonical form (youtu.be / &list= / ?si= → watch?v=ID)
+      ...('yt_url' in updated ? { yt_url: canonicalUrl(updated.yt_url) } : {}),
       cut_segments: normalizeCutSegments(updated.cut_segments ?? tracks[idx].cut_segments),
       updated_at: Date.now(),
     }
@@ -141,9 +149,10 @@ module.exports = function registerLibraryHandlers(ipcMain) {
     const tracks = db.tracks.read()
     const norm = s => (s || '').toLowerCase().trim()
 
-    // 1. Match by yt_url first (most reliable identifier)
-    if (track.yt_url) {
-      const byUrl = tracks.find(t => t.yt_url && t.yt_url === track.yt_url)
+    // 1. Match by yt_url first (most reliable identifier) — same video in any link format
+    const key = urlKey(track.yt_url)
+    if (key) {
+      const byUrl = tracks.find(t => urlKey(t.yt_url) === key)
       if (byUrl) {
         // Merge any missing metadata onto existing track
         let changed = false
@@ -163,7 +172,7 @@ module.exports = function registerLibraryHandlers(ipcMain) {
     if (byMeta) {
       // Merge yt_url if local track is missing it
       let changed = false
-      if (!byMeta.yt_url && track.yt_url) { byMeta.yt_url = track.yt_url; changed = true }
+      if (!byMeta.yt_url && track.yt_url) { byMeta.yt_url = canonicalUrl(track.yt_url); changed = true }
       if (!byMeta.lyrics && track.lyrics)  { byMeta.lyrics = track.lyrics; changed = true }
       if ((!byMeta.cut_segments || byMeta.cut_segments.length === 0) && track.cut_segments?.length) {
         byMeta.cut_segments = normalizeCutSegments(track.cut_segments); changed = true
@@ -179,7 +188,7 @@ module.exports = function registerLibraryHandlers(ipcMain) {
       album:     track.album     || '',
       duration:  track.duration  || 0,
       file_path: '',
-      yt_url:    track.yt_url    || '',
+      yt_url:    canonicalUrl(track.yt_url),
       cover_url: track.cover_url || '',
       lyrics:    track.lyrics    || '',
       gain:      track.gain      || 0,

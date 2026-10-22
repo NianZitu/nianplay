@@ -14,6 +14,7 @@ import {
   writeBatch, serverTimestamp, getDoc,
 } from 'firebase/firestore'
 import { auth, db, trackCloudId, playlistCloudId } from '../firebase'
+import { urlKey, canonicalUrl } from '../utils/mediaUrl'
 
 const AuthContext = createContext(null)
 const DEFAULT_PROFILE = { displayName: '', avatarDataUrl: '', frame: 'classic' }
@@ -77,8 +78,10 @@ function trackKey(track) {
 
 function findTrackMatch(tracks, target) {
   if (!target) return null
-  if (target.yt_url) {
-    const byUrl = tracks.find(t => t.yt_url && t.yt_url === target.yt_url)
+  // Same video in any link format (youtu.be, &list=, ?si=...) counts as the same link
+  const key = urlKey(target.yt_url)
+  if (key) {
+    const byUrl = tracks.find(t => urlKey(t.yt_url) === key)
     if (byUrl) return byUrl
   }
 
@@ -215,7 +218,7 @@ export function AuthProvider({ children }) {
           artist:    t.artist    || '',
           album:     t.album     || '',
           duration:  t.duration  || 0,
-          yt_url:    t.yt_url    || '',
+          yt_url:    canonicalUrl(t.yt_url),
           cover_url: t.cover_url || '',
           lyrics:    t.lyrics    || '',
           gain:      t.gain      || 0,
@@ -262,7 +265,7 @@ export function AuthProvider({ children }) {
             artist:         t.artist || '',
             album:          t.album || '',
             duration:       t.duration || 0,
-            yt_url:         t.yt_url || '',
+            yt_url:         canonicalUrl(t.yt_url),
             cover_url:      publicMediaUrl(t.cover_url || t.cover_path),
             lyrics:         t.lyrics || '',
             gain:           t.gain || 0,
@@ -277,7 +280,7 @@ export function AuthProvider({ children }) {
             artist:         t.artist    || '',
             album:          t.album     || '',
             duration:       t.duration  || 0,
-            yt_url:         t.yt_url    || '',
+            yt_url:         canonicalUrl(t.yt_url),
             cover_url:      publicMediaUrl(t.cover_url || t.cover_path),
             lyrics:         t.lyrics    || '',
             gain:           t.gain      || 0,
@@ -329,7 +332,7 @@ export function AuthProvider({ children }) {
     setSyncStatus(s => ({ ...s, downloading: true, error: null }))
     try {
       const localTracks = await window.electron.library.getTracks()
-      const localUrlSet  = new Set((localTracks || []).filter(t => t.yt_url).map(t => t.yt_url))
+      const localUrlSet  = new Set((localTracks || []).map(t => urlKey(t.yt_url)).filter(Boolean))
       const localMetaSet = new Set((localTracks || []).map(trackKey))
 
       // Fetch cloud tracks
@@ -352,7 +355,7 @@ export function AuthProvider({ children }) {
           }
           return
         }
-        if (t.yt_url && localUrlSet.has(t.yt_url)) return   // already exists by URL
+        if (urlKey(t.yt_url) && localUrlSet.has(urlKey(t.yt_url))) return   // already exists by URL
         const key = trackKey(t)
         if (localMetaSet.has(key)) return                    // already exists by meta
         newTracks.push(t)
@@ -366,7 +369,7 @@ export function AuthProvider({ children }) {
           artist:    t.artist   || '',
           album:     t.album    || '',
           duration:  t.duration || 0,
-          yt_url:    t.yt_url   || '',
+          yt_url:    canonicalUrl(t.yt_url),
           cover_url: t.cover_url || '',
           lyrics:    t.lyrics   || '',
           gain:      t.gain     || 0,

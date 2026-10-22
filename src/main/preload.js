@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron')
 contextBridge.exposeInMainWorld('electron', {
   app: {
     getVersion: () => ipcRenderer.invoke('app:getVersion'),
+    openYoutube: (url) => ipcRenderer.invoke('app:openYoutube', url),
   },
 
   // Window controls

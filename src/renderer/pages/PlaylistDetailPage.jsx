@@ -4,8 +4,9 @@ import {
   Trash2, Loader2, CheckCircle2, AlertCircle,
   X, Search, ExternalLink, Pencil, Check, ListPlus, Settings2, Download,
   DownloadCloud, AlertTriangle, FolderOpen, Tag, Folder, ChevronDown, GripVertical,
-  Youtube,
+  Youtube, Link2, Save,
 } from 'lucide-react'
+import { canonicalUrl, youtubeVideoId, linkProblem } from '../utils/mediaUrl'
 import { usePlayer } from '../store/PlayerContext'
 import MaestroModal from '../components/MaestroModal'
 import VirtualRows from '../components/VirtualRows'
@@ -355,6 +356,236 @@ function scoreYt(ytResult, track) {
 }
 
 const UNKNOWN_ARTISTS = new Set(['desconhecido', 'unknown', 'desconocido', ''])
+
+function formatClock(secs) {
+  if (!secs) return '--:--'
+  return `${Math.floor(secs / 60)}:${String(Math.floor(secs % 60)).padStart(2, '0')}`
+}
+
+// Up to 3 YouTube candidates for a track, best first. Tries "artist - title", "title artist",
+// then "title" until a query returns results.
+async function searchYoutubeCandidates(track) {
+  const clean = q => (q || '').replace(/[<>"|?*]/g, ' ').replace(/\s{2,}/g, ' ').trim()
+  const artist = UNKNOWN_ARTISTS.has((track.artist || '').toLowerCase().trim()) ? '' : (track.artist || '').trim()
+  const queries = artist
+    ? [clean(`${artist} - ${track.title}`), clean(`${track.title} ${artist}`), clean(track.title)]
+    : [clean(track.title)]
+  for (const q of queries) {
+    if (!q) continue
+    const res = await window.electron.ytSearch.search(q)
+    if (res?.error) throw new Error(res.error)
+    if (res?.results?.length) {
+      return res.results
+        .map(r => ({ ...r, url: canonicalUrl(r.url), score: scoreYt(r, track) }))
+        .filter(r => youtubeVideoId(r.url))
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 3)
+    }
+  }
+  return []
+}
+
+// "Verificar links": lists tracks without a (valid) link and, with the user's OK, searches
+// YouTube and lets them pick the right video for each one. Only chosen links are saved.
+function LinkCheckModal({ tracks, onClose, onSaved }) {
+  // Snapshot when opened, so the list doesn't jump while saving
+  const [problems] = useState(() => tracks
+    .map(t => ({ track: t, problem: linkProblem(t.yt_url) }))
+    .filter(p => p.problem))
+  const [searches,  setSearches]  = useState({})   // trackId → { status: 'searching'|'done'|'error', options, error }
+  const [choices,   setChoices]   = useState({})   // trackId → url | null (null = "nenhuma destas")
+  const [running,   setRunning]   = useState(false)
+  const [saving,    setSaving]    = useState(false)
+  const [savedCount, setSavedCount] = useState(null)
+  const stopRef = useRef(false)
+
+  const searchedCount = Object.values(searches).filter(s => s.status === 'done' || s.status === 'error').length
+  const chosen = Object.entries(choices).filter(([, url]) => url)
+
+  async function searchOne(track) {
+    setSearches(prev => ({ ...prev, [track.id]: { status: 'searching' } }))
+    try {
+      const options = await searchYoutubeCandidates(track)
+      setSearches(prev => ({ ...prev, [track.id]: { status: 'done', options } }))
+    } catch (e) {
+      setSearches(prev => ({ ...prev, [track.id]: { status: 'error', error: e.message } }))
+    }
+  }
+
+  async function searchAll() {
+    stopRef.current = false
+    setRunning(true)
+    for (const { track } of problems) {
+      if (stopRef.current) break
+      if (searches[track.id]?.status === 'done') continue
+      await searchOne(track)
+    }
+    setRunning(false)
+  }
+
+  async function save() {
+    if (!window.electron || !chosen.length) return
+    setSaving(true)
+    const updated = []
+    for (const [trackId, url] of chosen) {
+      const ok = await window.electron.library.updateTrack({ id: trackId, yt_url: url })
+      if (ok) updated.push({ id: trackId, yt_url: url })
+    }
+    setSaving(false)
+    setSavedCount(updated.length)
+    onSaved?.(updated)
+  }
+
+  const problemLabel = { missing: 'sem link', invalid: 'link inválido' }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="bg-surface-800 border border-white/10 rounded-2xl w-[640px] max-h-[85vh] flex flex-col shadow-2xl">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 pt-5 pb-3 shrink-0">
+          <div>
+            <h2 className="text-sm font-semibold text-white flex items-center gap-2">
+              <Link2 size={15} className="text-brand-400" /> Verificar links
+            </h2>
+            <p className="text-xs text-white/35 mt-0.5">
+              {problems.length === 0
+                ? `Todas as ${tracks.length} faixas têm link.`
+                : `${problems.length} de ${tracks.length} faixa${tracks.length !== 1 ? 's' : ''} sem link válido.`}
+            </p>
+          </div>
+          <button onClick={onClose} className="btn-ghost p-1 text-white/40"><X size={16} /></button>
+        </div>
+
+        {problems.length === 0 ? (
+          <div className="flex flex-col items-center gap-2 py-10 text-center">
+            <CheckCircle2 size={28} className="text-green-400" />
+            <p className="text-sm text-white/70">Tudo certo — nenhuma faixa precisa de link.</p>
+          </div>
+        ) : (
+          <>
+            {/* Permission / progress */}
+            <div className="px-5 pb-3 shrink-0">
+              <div className="rounded-xl border border-white/8 bg-surface-900/60 px-4 py-3 text-xs text-white/55 leading-relaxed">
+                {searchedCount === 0 && !running
+                  ? <>Posso pesquisar cada uma no YouTube e mostrar até 3 vídeos possíveis para você escolher o certo.
+                      É feita uma busca por faixa, o que pode levar alguns segundos cada. Nada é salvo sem a sua escolha.</>
+                  : running
+                    ? <span className="flex items-center gap-2"><Loader2 size={12} className="animate-spin text-brand-400" />
+                        Pesquisando no YouTube… {searchedCount} / {problems.length}</span>
+                    : <>Pesquisa concluída para {searchedCount} de {problems.length}. Escolha o vídeo correto de cada faixa
+                        (ou "nenhuma destas") e salve. Use <ExternalLink size={10} className="inline" /> para conferir no navegador.</>}
+              </div>
+            </div>
+
+            {/* Track list */}
+            <div className="overflow-y-auto flex-1 px-5 pb-3 flex flex-col gap-2">
+              {problems.map(({ track, problem }) => {
+                const s = searches[track.id]
+                const choice = choices[track.id]
+                return (
+                  <div key={track.id} className="rounded-xl border border-white/6 bg-surface-900/40 px-3 py-2.5">
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-white truncate">{track.title}</p>
+                        <p className="text-xs text-white/40 truncate">
+                          {track.artist} · {formatClock(track.duration)}
+                          {problem === 'invalid' && <span className="ml-1 text-white/25 truncate">· {track.yt_url}</span>}
+                        </p>
+                      </div>
+                      <span className={`shrink-0 text-[10px] px-2 py-0.5 rounded-full border
+                        ${problem === 'invalid' ? 'text-red-300 border-red-400/30 bg-red-500/10' : 'text-amber-300 border-amber-400/30 bg-amber-500/10'}`}>
+                        {problemLabel[problem]}
+                      </span>
+                      {choice && <span className="shrink-0 text-[10px] text-green-400 flex items-center gap-1"><Check size={11} /> escolhido</span>}
+                      {!s && !running && (
+                        <button onClick={() => searchOne(track)} className="btn-ghost text-xs px-2 py-1 text-brand-400 shrink-0">
+                          <Search size={11} className="inline mr-1" />Buscar
+                        </button>
+                      )}
+                      {s?.status === 'searching' && <Loader2 size={13} className="animate-spin text-brand-400 shrink-0" />}
+                    </div>
+
+                    {s?.status === 'error' && (
+                      <p className="text-xs text-red-400 mt-2">Busca falhou: {s.error}</p>
+                    )}
+                    {s?.status === 'done' && s.options.length === 0 && (
+                      <p className="text-xs text-white/35 mt-2">Nenhum vídeo encontrado no YouTube.</p>
+                    )}
+                    {s?.status === 'done' && s.options.length > 0 && (
+                      <div className="mt-2 flex flex-col gap-1">
+                        {s.options.map((opt, i) => {
+                          const selected = choice === opt.url
+                          const diff = track.duration && opt.duration ? Math.round(opt.duration - track.duration) : null
+                          return (
+                            <label key={opt.url}
+                              className={`flex items-center gap-2.5 rounded-lg px-2 py-1.5 cursor-pointer border transition-colors
+                                ${selected ? 'border-brand-400/40 bg-brand-600/15' : 'border-transparent hover:bg-white/4'}`}>
+                              <input type="radio" name={`yt-${track.id}`} checked={selected}
+                                onChange={() => setChoices(prev => ({ ...prev, [track.id]: opt.url }))}
+                                className="accent-amber-500 shrink-0" />
+                              {opt.thumbnail
+                                ? <img src={opt.thumbnail} alt="" loading="lazy" className="w-16 h-9 rounded object-cover shrink-0" />
+                                : <div className="w-16 h-9 rounded bg-surface-600 shrink-0" />}
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs text-white/85 truncate">{opt.title}</p>
+                                <p className="text-[11px] text-white/35 truncate">
+                                  {opt.channel} · {formatClock(opt.duration)}
+                                  {diff !== null && (
+                                    <span className={Math.abs(diff) <= 5 ? 'text-green-400/70' : Math.abs(diff) <= 20 ? 'text-amber-400/70' : 'text-red-400/70'}>
+                                      {' '}({diff > 0 ? '+' : ''}{diff}s)
+                                    </span>
+                                  )}
+                                </p>
+                              </div>
+                              {i === 0 && opt.score >= 0.6 && (
+                                <span className="shrink-0 text-[10px] text-brand-300 border border-brand-400/30 rounded-full px-1.5">mais provável</span>
+                              )}
+                              <button type="button" title="Abrir no YouTube"
+                                onClick={e => { e.preventDefault(); window.electron?.app?.openYoutube?.(opt.url) }}
+                                className="btn-ghost p-1 text-white/30 hover:text-white shrink-0">
+                                <ExternalLink size={12} />
+                              </button>
+                            </label>
+                          )
+                        })}
+                        <label className={`flex items-center gap-2.5 rounded-lg px-2 py-1 cursor-pointer text-xs
+                          ${choice === null ? 'text-white/70' : 'text-white/35 hover:text-white/60'}`}>
+                          <input type="radio" name={`yt-${track.id}`} checked={choice === null}
+                            onChange={() => setChoices(prev => ({ ...prev, [track.id]: null }))}
+                            className="accent-amber-500" />
+                          Nenhuma destas
+                        </label>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center gap-2 px-5 py-4 border-t border-white/6 shrink-0">
+              {savedCount !== null
+                ? <span className="text-xs text-green-400 flex items-center gap-1.5 flex-1"><CheckCircle2 size={13} /> {savedCount} link{savedCount !== 1 ? 's' : ''} salvo{savedCount !== 1 ? 's' : ''}</span>
+                : <span className="text-xs text-white/35 flex-1">{chosen.length} escolhido{chosen.length !== 1 ? 's' : ''}</span>}
+              {running ? (
+                <button onClick={() => { stopRef.current = true }} className="btn-ghost text-xs px-3 py-2">Parar</button>
+              ) : searchedCount < problems.length && (
+                <button onClick={searchAll} disabled={saving} className="btn-ghost text-xs px-3 py-2 text-brand-400 flex items-center gap-1.5">
+                  <Search size={12} /> {searchedCount === 0 ? `Buscar no YouTube (${problems.length})` : 'Buscar o restante'}
+                </button>
+              )}
+              <button onClick={save} disabled={!chosen.length || saving || running}
+                className="btn-primary text-xs px-4 py-2 flex items-center gap-1.5 disabled:opacity-40">
+                {saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+                Salvar {chosen.length || ''} link{chosen.length !== 1 ? 's' : ''}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
 
 function DownloadMissingModal({ tracks, onClose, onLinked }) {
   const [outputDir,  setOutputDir]  = useState('')
@@ -804,6 +1035,7 @@ export default function PlaylistDetailPage({ playlist, onBack }) {
   const [exportToast,    setExportToast]    = useState(null)
   const [showYoutubeExport, setShowYoutubeExport] = useState(false)
   const [showMissing,    setShowMissing]    = useState(false)
+  const [showLinkCheck,  setShowLinkCheck]  = useState(false)
   // Groups state
   const [groups,         setGroups]         = useState([])
   const [groupsEnabled,  setGroupsEnabled]  = useState(playlist.groups_enabled || false)
@@ -1157,6 +1389,9 @@ export default function PlaylistDetailPage({ playlist, onBack }) {
                 <IconBtn title="Criar no YouTube" onClick={() => setShowYoutubeExport(true)} disabled={!tracks.length}>
                   <Youtube size={15} />
                 </IconBtn>
+                <IconBtn title="Verificar links das faixas" onClick={() => setShowLinkCheck(true)} disabled={!tracks.length}>
+                  <Link2 size={15} />
+                </IconBtn>
                 <IconBtn
                   title={groupsEnabled ? 'Grupos ativados' : 'Ativar grupos de sequência'}
                   onClick={handleToggleGroups}
@@ -1468,6 +1703,18 @@ export default function PlaylistDetailPage({ playlist, onBack }) {
           onDone={(res) => {
             setExportToast(`YouTube: ${res.added} vídeos adicionados`)
             setTimeout(() => setExportToast(null), 3000)
+          }}
+        />
+      )}
+      {showLinkCheck && (
+        <LinkCheckModal
+          tracks={tracks}
+          onClose={() => setShowLinkCheck(false)}
+          onSaved={updated => {
+            const byId = new Map(updated.map(u => [u.id, u.yt_url]))
+            setTracks(prev => prev.map(t => byId.has(t.id) ? { ...t, yt_url: byId.get(t.id) } : t))
+            const current = tracks.filter(t => byId.has(t.id))
+            current.forEach(t => updateQueuedTrack({ ...t, yt_url: byId.get(t.id) }))
           }}
         />
       )}

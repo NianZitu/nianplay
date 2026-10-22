@@ -3,8 +3,32 @@ const fs     = require('fs')
 const { spawn } = require('child_process')
 const { v4: uuidv4 } = require('uuid')
 const { getDB } = require('../db')
+const { canonicalUrl } = require('../mediaUrl')
+const { pathKey } = require('../urlRepair')
 
 const activeJobs = new Map()
+
+// Markers of the lines yt-dlp prints for us (see reportArgs in runDownload)
+const MARK_FILE  = 'NIANPLAY_FILE'
+const MARK_TITLE = 'NIANPLAY_TITLE'
+
+// A finished file that is already a library track gets the link it was downloaded from
+function linkFilesToLibrary(files) {
+  if (!files?.length) return
+  try {
+    const db = getDB()
+    const byPath = new Map(files.map(f => [pathKey(f.path), f.url]))
+    const tracks = db.tracks.read()
+    let changed = 0
+    tracks.forEach((t, i) => {
+      const url = t.file_path && byPath.get(pathKey(t.file_path))
+      if (url && t.yt_url !== url) { tracks[i] = { ...t, yt_url: url, updated_at: Date.now() }; changed++ }
+    })
+    if (changed) db.tracks.write(tracks)
+  } catch (err) {
+    console.error('[Downloader] linkFilesToLibrary error:', err.message)
+  }
+}
 
 module.exports = function registerDownloaderHandlers(ipcMain, mainWindow) {
   function sendProgress(data) {
@@ -55,10 +79,11 @@ module.exports = function registerDownloaderHandlers(ipcMain, mainWindow) {
 
     runDownload(id, opts, (data) => {
       sendProgress({ ...data, trackId: opts.trackId })
-    }).then(() => {
-      // After successful download, try to link the file to the library track
-      if (opts.trackId) {
-        linkDownloadedFile(opts.trackId, opts, id)
+    }).then((result) => {
+      // Only a successful download is linked to the track (a failed one used to link
+      // whatever audio file had been modified most recently in the folder)
+      if (opts.trackId && result?.ok) {
+        linkDownloadedFile(opts.trackId, opts, result.files)
       }
     }).catch(err => {
       console.error('[Downloader] Unhandled:', err)
@@ -101,49 +126,23 @@ function killProcess(proc) {
   }
 }
 
-// After a download finishes, find the file and link it to the library track
-async function linkDownloadedFile(trackId, opts, downloadId) {
+// After a successful download, link the exact file yt-dlp reported to the library track.
+// (This used to pick the newest audio file in the folder with a similar name — with several
+// downloads running at once that linked files, and links, to the wrong tracks.)
+async function linkDownloadedFile(trackId, opts, files) {
   try {
-    const { app } = require('electron')
-    const AUDIO_EXT = new Set(['.mp3', '.flac', '.wav', '.aac', '.ogg', '.m4a', '.opus', '.wma'])
-    const outDir = opts.outputDir || app.getPath('downloads')
-    const titleHint = (opts.trackTitle || '').toLowerCase().replace(/[^\w\s]/g, '').trim()
-
-    // Find audio files modified in last 5 minutes in the output dir
-    const recent = Date.now() - 5 * 60 * 1000
-    let candidates = []
-    try {
-      candidates = fs.readdirSync(outDir)
-        .filter(f => AUDIO_EXT.has(path.extname(f).toLowerCase()))
-        .map(f => ({ name: f, full: path.join(outDir, f), mtime: fs.statSync(path.join(outDir, f)).mtimeMs }))
-        .filter(f => f.mtime >= recent)
-        .sort((a, b) => b.mtime - a.mtime)
-    } catch {}
-
-    if (!candidates.length) return
-
-    // Score by name similarity to titleHint
-    function sim(a, b) {
-      a = a.toLowerCase().replace(/[^\w\s]/g, ''); b = b.toLowerCase().replace(/[^\w\s]/g, '')
-      if (!a || !b) return 0
-      const aW = new Set(a.split(/\s+/).filter(Boolean))
-      const bW = b.split(/\s+/).filter(Boolean)
-      return bW.filter(w => aW.has(w)).length / Math.max(aW.size, bW.length)
+    const file = (files || []).find(f => f.path && fs.existsSync(f.path))
+    if (!file) {
+      console.warn('[Downloader] No file reported by yt-dlp for track', trackId, '— not linking')
+      return
     }
+    const best = { full: file.path }
 
-    const best = titleHint
-      ? candidates.sort((a, b) => sim(titleHint, path.basename(b.name, path.extname(b.name))) - sim(titleHint, path.basename(a.name, path.extname(a.name))))[0]
-      : candidates[0]
-
-    if (!best) return
-
-    const db = getDB()
-    const tracks = db.tracks.read()
-    const idx = tracks.findIndex(t => t.id === trackId)
-    if (idx === -1) return
+    const current = getDB().tracks.read().find(t => t.id === trackId)
+    if (!current) return
 
     // Extract embedded cover if present
-    let cover_path = tracks[idx].cover_path
+    let cover_path = current.cover_path
     if (!cover_path) {
       try {
         const { parseFile } = await import('music-metadata')
@@ -159,12 +158,17 @@ async function linkDownloadedFile(trackId, opts, downloadId) {
       } catch {}
     }
 
-    const isYtUrl = url => url && (url.includes('youtube.com') || url.includes('youtu.be'))
+    // Re-read after the async cover extraction: the library may have changed meanwhile
+    const db = getDB()
+    const tracks = db.tracks.read()
+    const idx = tracks.findIndex(t => t.id === trackId)
+    if (idx === -1) return
     tracks[idx] = {
       ...tracks[idx],
       file_path:  best.full,
       cover_path: cover_path || tracks[idx].cover_path,
-      yt_url:     tracks[idx].yt_url || (isYtUrl(opts.url) ? opts.url : tracks[idx].yt_url),
+      // The link the file was actually downloaded from (canonical form)
+      yt_url:     file.url || canonicalUrl(opts.url) || tracks[idx].yt_url,
       updated_at: Date.now(),
     }
     db.tracks.write(tracks)
@@ -264,6 +268,17 @@ async function runDownload(id, opts, sendProgress) {
     '360p':  'bestvideo[height<=360]+bestaudio/best',
   }
 
+  // yt-dlp reports, for every downloaded video, the link it came from and the FINAL file path
+  // (after conversion/merge). This is how each file is tied to its link — never by name.
+  // --print implies quiet mode, so the title for the UI comes from a second print line;
+  // --progress keeps the progress lines. --encoding utf-8 keeps accented file names intact.
+  const reportArgs = [
+    '--print', `before_dl:${MARK_TITLE}\t%(title)s`,
+    '--print', `after_move:${MARK_FILE}\t%(webpage_url)s\t%(filepath)s`,
+    '--no-simulate',
+    '--encoding', 'utf-8',
+  ]
+
   let args
   if (format === 'audio') {
     args = [
@@ -281,6 +296,7 @@ async function runDownload(id, opts, sendProgress) {
       '--progress',
       '--no-warnings',
       isPlaylist ? '--yes-playlist' : '--no-playlist',
+      ...reportArgs,
       ...cookieArgs,
     ]
   } else {
@@ -293,6 +309,7 @@ async function runDownload(id, opts, sendProgress) {
       '--newline',
       '--progress',
       isPlaylist ? '--yes-playlist' : '--no-playlist',
+      ...reportArgs,
       ...cookieArgs,
     ]
   }
@@ -303,22 +320,42 @@ async function runDownload(id, opts, sendProgress) {
   return new Promise((resolve, reject) => {
     console.log('[Downloader] Spawning:', ytDlpBin, args.slice(0, 4).join(' '), '...')
 
-    const proc = spawn(ytDlpBin, args, { windowsHide: true })
+    const proc = spawn(ytDlpBin, args, {
+      windowsHide: true,
+      env: { ...process.env, PYTHONIOENCODING: 'utf-8', PYTHONUTF8: '1' },
+    })
     activeJobs.set(id, proc)
 
     let stderr = ''
+    const files = []   // [{ url, path }] — one per finished video
 
-    // Parse yt-dlp stdout line by line
+    // Parse yt-dlp stdout line by line (setEncoding keeps multi-byte chars split across chunks intact)
+    proc.stdout.setEncoding('utf8')
     let buf = ''
     proc.stdout.on('data', (chunk) => {
-      buf += chunk.toString()
+      buf += chunk
       const lines = buf.split('\n')
       buf = lines.pop() // keep incomplete line
 
       for (const line of lines) {
-        const trimmed = line.trim()
-        if (!trimmed) continue
+        const trimmed = line.replace(/\r$/, '')
+        if (!trimmed.trim()) continue
         console.log('[yt-dlp]', trimmed)
+
+        if (trimmed.startsWith(MARK_FILE + '\t')) {
+          const [, webpageUrl, filePath] = trimmed.split('\t')
+          if (filePath) {
+            files.push({ url: canonicalUrl(webpageUrl || url), path: filePath })
+            _updateDownload(id, { title: path.basename(filePath), files })
+            sendProgress({ id, status: 'downloading', title: path.basename(filePath) })
+          }
+          continue
+        }
+        if (trimmed.startsWith(MARK_TITLE + '\t')) {
+          const title = trimmed.slice(MARK_TITLE.length + 1)
+          if (title) sendProgress({ id, status: 'downloading', title })
+          continue
+        }
 
         // Progress line: [download]  45.3% of  3.45MiB at  1.23MiB/s ETA 00:02
         const progressMatch = trimmed.match(/\[download\]\s+([\d.]+)%\s+of\s+([\S]+)\s+at\s+([\S]+)\s+ETA\s+([\S]+)/)
@@ -360,16 +397,19 @@ async function runDownload(id, opts, sendProgress) {
     proc.on('close', (code) => {
       activeJobs.delete(id)
       if (code === 0) {
-        _updateDownload(id, { status: 'done' })
+        _updateDownload(id, { status: 'done', files })
+        // Files that are already in the library get their link now (e.g. re-downloads);
+        // new files get it when the folder is scanned (see urlRepair.js)
+        linkFilesToLibrary(files)
         sendProgress({ id, status: 'done', percent: 100 })
-        resolve()
+        resolve({ ok: true, files })
       } else {
         const msg = stderr
           ? stderr.trim().split('\n').pop()   // last line of stderr
           : `yt-dlp saiu com código ${code}`
         _updateDownload(id, { status: 'error', error: msg })
         sendProgress({ id, status: 'error', error: msg })
-        resolve() // resolve so caller doesn't unhandled-reject
+        resolve({ ok: false, files }) // resolve so caller doesn't unhandled-reject
       }
     })
   })
