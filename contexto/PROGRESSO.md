@@ -55,6 +55,16 @@ atualizando estilo a cada frame (é barato); o ganho real está em layout, JavaS
   1.1.20/1.1.21 têm e que o auto-updater precisa), manda nota genérica e depende de `python3` (nesta máquina é só o
   atalho da Microsoft Store — quebraria depois do push). Novo `release.ps1` faz o mesmo fluxo com verificações antes do push.
 - A build publicada difere da testada pelo usuário apenas no texto do changelog.
+- Problemas no caminho (todos resolvidos, nenhum publicou nada pela metade):
+  1. `release.ps1` com travessão "—" em UTF-8 sem BOM → PowerShell 5.1 leu como ANSI e não conseguiu analisar o
+     script (nada executou). Script agora é só ASCII.
+  2. `git push` sem login (máquina formatada) → usuário fez login pelo Git Credential Manager no navegador.
+  3. **`.release-token` expirado/revogado** (GitHub respondeu 401). O script antigo não parava nesse erro. O
+     `release.ps1` passou a usar o **GitHub CLI** (`gh`, instalado via winget; usuário logado com `gh auth login --web`,
+     escopo `repo`) e para em qualquer falha. O `.release-token` não é mais usado.
+- **Publicado ✅** https://github.com/NianZitu/nianplay/releases/tag/v1.1.25 — commits `e67c901` (Release 1.1.25)
+  e `f608065` (release.ps1 com gh). Conferido pela API pública: é a "latest", 4 arquivos com tamanhos iguais aos
+  locais, `latest.yml` servido idêntico ao local (SHA-512 do instalador confere), notas com os números no topo.
 
 ---
 

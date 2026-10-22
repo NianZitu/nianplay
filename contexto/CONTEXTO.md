@@ -55,7 +55,8 @@ src/renderer/              React (Vite root)
   styles/globals.css       Classes utilitárias (btn-*, panel, playlist-track-row, has-wallpaper ...)
 DESIGN_SYSTEM.md           Guia visual
 release.ps1                Commit/push + release no GitHub com notas de release-notes\<versão>.md e os 4 arquivos
-                           do auto-updater (usa .release-token). Substitui o release.bat na prática
+                           do auto-updater, via GitHub CLI (`gh`, logado com `gh auth login --web`). Substitui o
+                           release.bat. Manter o arquivo só em ASCII (PowerShell 5.1). O .release-token está expirado
 release.bat                Script antigo — NÃO usar: só envia o instalador (sem latest.yml o auto-updater não vê a
                            versão), manda nota genérica e depende de python3
 release-notes/             Corpo da release no GitHub por versão (é o texto que usuários de versões antigas veem)
@@ -120,8 +121,8 @@ e `cover_thumb_src` (o `cover_path` de onde ela foi feita). A UI só usa a minia
 ## Problemas conhecidos / próximos passos
 
 Fases 1–3 de otimização concluídas (ver `PROGRESSO.md`, versões 1.1.22, 1.1.23 e 1.1.24).
-`webSecurity` ligado desde 1.1.25 (protocolo `nianmedia://`) — testado e aprovado pelo usuário. Versões 1.1.22–1.1.25
-testadas no app real; nenhuma publicada no GitHub ainda. Ainda em aberto:
+`webSecurity` ligado desde 1.1.25 (protocolo `nianmedia://`) — testado e aprovado pelo usuário. **1.1.25 publicada**
+no GitHub em 22/10/2026 (versão com toda a otimização; 1.1.22–1.1.24 nunca foram publicadas). Ainda em aberto:
 1. Electron avisa "Insecure Content-Security-Policy" no console (não há CSP). Adicionar uma CSP exige listar
    Firebase/Google, `nianmedia:`, `data:`, `https:` (imagens remotas) — tarefa separada.
 2. Pastas abertas dentro da visualização por grupos não são virtualizadas (grupos costumam ser pequenos).
