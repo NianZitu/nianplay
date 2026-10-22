@@ -126,11 +126,11 @@ module.exports = function registerYoutubeHandlers(ipcMain) {
       const refreshToken = (settings.youtubeRefreshToken || '').trim()
 
       if (!clientId || !clientSecret || !refreshToken) {
-        return { error: 'Configure Client ID, Client Secret e Refresh Token do YouTube nas configuraÃ§Ãµes.' }
+        return { error: 'Configure Client ID, Client Secret e Refresh Token do YouTube nas configurações.' }
       }
 
       const playlist = db.playlists.read().find(p => p.id === playlistId)
-      if (!playlist) return { error: 'Playlist nÃ£o encontrada' }
+      if (!playlist) return { error: 'Playlist não encontrada' }
 
       const rows = db.playlistTracks.read()
         .filter(r => r.playlist_id === playlistId)
@@ -139,8 +139,9 @@ module.exports = function registerYoutubeHandlers(ipcMain) {
 
       const { repaired } = backfillYoutubeUrlsFromDownloads(db, rows, tracks)
 
+      const trackById = new Map(tracks.map(t => [t.id, t]))
       const playlistTracks = rows
-        .map(r => tracks.find(t => t.id === r.track_id))
+        .map(r => trackById.get(r.track_id))
         .filter(Boolean)
 
       const videoIds = playlistTracks

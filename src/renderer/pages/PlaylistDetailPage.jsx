@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useMemo } from 'react'
 import {
   ArrowLeft, Play, Shuffle, SlidersHorizontal, Plus,
   Trash2, Loader2, CheckCircle2, AlertCircle,
@@ -8,6 +8,13 @@ import {
 } from 'lucide-react'
 import { usePlayer } from '../store/PlayerContext'
 import MaestroModal from '../components/MaestroModal'
+import VirtualRows from '../components/VirtualRows'
+import { listCoverSrc, coverSrc } from '../utils/covers'
+
+// Flat track list is virtualized: each slot is a 58px row + 2px gap. Keep in sync with the row markup.
+const FLAT_ROW_SLOT = 60
+// "Adicionar faixas" modal list: 53px row + 4px gap
+const ADD_ROW_SLOT = 57
 
 function YoutubeExportModal({ playlist, onClose, onDone }) {
   const [privacy, setPrivacy] = useState('private')
@@ -194,15 +201,17 @@ function AddTracksModal({ playlistId, currentTrackIds, onClose, onAdded }) {
   const [search,    setSearch]    = useState('')
   const [added,     setAdded]     = useState(new Set(currentTrackIds)) // persists adds during session
   const [adding,    setAdding]    = useState(new Set())
+  const listScrollRef = useRef(null)
 
   useEffect(() => {
     if (!window.electron) return
     window.electron.library.getTracks().then(t => setAllTracks(t || []))
   }, [])
 
-  const filtered = allTracks.filter(t =>
-    (t.title + t.artist).toLowerCase().includes(search.toLowerCase())
-  )
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase()
+    return q ? allTracks.filter(t => (t.title + t.artist).toLowerCase().includes(q)) : allTracks
+  }, [allTracks, search])
 
   async function handleAdd(track) {
     if (!window.electron || added.has(track.id)) return
@@ -252,18 +261,24 @@ function AddTracksModal({ playlistId, currentTrackIds, onClose, onAdded }) {
             />
           </div>
         </div>
-        <div className="overflow-y-auto flex-1 px-5 pb-5 flex flex-col gap-1">
+        <div ref={listScrollRef} className="overflow-y-auto flex-1 px-5 pb-5">
           {filtered.length === 0 && (
             <p className="text-center text-white/20 text-sm py-8">Nenhuma faixa encontrada</p>
           )}
-          {filtered.map(t => {
+          <VirtualRows
+            items={filtered}
+            rowHeight={ADD_ROW_SLOT}
+            scrollRef={listScrollRef}
+            renderRow={t => {
             const isAdded   = added.has(t.id)
             const isAdding  = adding.has(t.id)
             return (
-              <div key={t.id} className="flex items-center gap-3 py-2 border-b border-white/5 last:border-0">
+              // Fixed slot: 53px row (py-2 + 36px + border) + 4px gap — must equal ADD_ROW_SLOT
+              <div key={t.id} className="pb-1" style={{ height: ADD_ROW_SLOT }}>
+              <div className="flex items-center gap-3 py-2 h-full border-b border-white/5">
                 <div className="w-9 h-9 rounded overflow-hidden bg-surface-600 shrink-0">
                   {t.cover_path
-                    ? <img src={/^https?:\/\//.test(t.cover_path) ? t.cover_path : `file://${t.cover_path}`} alt="" className="w-full h-full object-cover" />
+                    ? <img src={listCoverSrc(t)} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />
                     : <div className="w-full h-full flex items-center justify-center text-white/20">♪</div>
                   }
                 </div>
@@ -286,8 +301,10 @@ function AddTracksModal({ playlistId, currentTrackIds, onClose, onAdded }) {
                   </button>
                 )}
               </div>
+              </div>
             )
-          })}
+            }}
+          />
         </div>
       </div>
     </div>
@@ -739,7 +756,7 @@ function GroupFolder({ group, groupTracks, expanded, onToggle, onPlayGroup, onPl
                 </button>
                 <div className="w-8 h-8 rounded overflow-hidden bg-surface-600 shrink-0">
                   {track.cover_path
-                    ? <img src={/^https?:\/\//.test(track.cover_path) ? track.cover_path : `file://${track.cover_path}`} alt="" className="w-full h-full object-cover" />
+                    ? <img src={listCoverSrc(track)} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />
                     : <div className="w-full h-full flex items-center justify-center text-white/20 text-xs">♪</div>
                   }
                 </div>
@@ -797,9 +814,12 @@ export default function PlaylistDetailPage({ playlist, onBack }) {
   const [expandedGroups, setExpandedGroups] = useState(new Set())
   const { playTrack, playNext, setShuffle, currentTrack, isPlaying, setQueue, queue,
           setGroupsEnabled: setPlayerGroupsEnabled, updateQueuedTrack } = usePlayer()
+  const listScrollRef = useRef(null)
 
   useEffect(() => { loadTracks() }, [playlist.id])
   useEffect(() => { loadGroups() }, [playlist.id])
+  // New cover thumbnails were generated in the background — reload to use them
+  useEffect(() => window.electron?.library?.onThumbsUpdated?.(() => loadTracks()), [playlist.id])
   // Sync player groups setting whenever we enter this playlist page
   useEffect(() => {
     setPlayerGroupsEnabled(playlist.groups_enabled || false)
@@ -1027,7 +1047,7 @@ export default function PlaylistDetailPage({ playlist, onBack }) {
     if (p) setCoverInput(`file://${p}`)
   }
 
-  const coverSrc   = coverInput || playlist.cover_url
+  const heroCover  = coverSrc(coverInput || playlist.cover_url)
   const currentIds = tracks.map(t => t.id)
   const missingTracks = tracks.filter(t => !t.file_path)
   const totalDuration = tracks.reduce((s, t) => s + (t.duration || 0), 0)
@@ -1053,8 +1073,8 @@ export default function PlaylistDetailPage({ playlist, onBack }) {
             className="group relative w-32 h-32 rounded-2xl overflow-hidden bg-surface-700 shrink-0 cursor-pointer shadow-2xl shadow-black/40"
             onClick={() => setEditingCover(e => !e)}
           >
-            {coverSrc
-              ? <img src={coverSrc} alt={playlist.name} className="w-full h-full object-cover" />
+            {heroCover
+              ? <img src={heroCover} alt={playlist.name} className="w-full h-full object-cover" />
               : <div className="w-full h-full flex items-center justify-center text-white/8 text-4xl">♫</div>
             }
             <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1229,7 +1249,7 @@ export default function PlaylistDetailPage({ playlist, onBack }) {
       )}
 
       {/* ── Track list ── */}
-      <div className="flex-1 overflow-y-auto px-3 py-2">
+      <div ref={listScrollRef} className="flex-1 overflow-y-auto px-3 py-2">
         {tracks.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-white/20 gap-3">
             <p className="text-sm">Playlist vazia</p>
@@ -1268,7 +1288,7 @@ export default function PlaylistDetailPage({ playlist, onBack }) {
                     Nenhuma faixa foi atribuída a um grupo ainda
                   </p>
                 )}
-                {/* Ungrouped tracks */}
+                {/* Ungrouped tracks (virtualized — same 60px slot as the flat view) */}
                 {ungroupedTracks.length > 0 && (
                   <>
                     {groupsWithTracks.length > 0 && (
@@ -1276,13 +1296,17 @@ export default function PlaylistDetailPage({ playlist, onBack }) {
                         Faixas avulsas
                       </p>
                     )}
-                    {ungroupedTracks.map((track, i) => {
+                    <VirtualRows
+                      items={ungroupedTracks}
+                      rowHeight={FLAT_ROW_SLOT}
+                      scrollRef={listScrollRef}
+                      renderRow={(track, i) => {
                       const active = currentTrack?.id === track.id
                       return (
-                        <div key={track.id} className="relative">
+                        <div key={track.id} className="relative pb-0.5" style={{ height: FLAT_ROW_SLOT }}>
                           <div
                             onDoubleClick={() => handlePlay(track)}
-                            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors group cursor-pointer
+                            className={`flex items-center gap-3 px-3 py-2.5 h-full rounded-lg transition-colors group cursor-pointer
                               ${active ? 'bg-brand-600/25 border border-brand-400/20 shadow-sm shadow-black/15' : 'playlist-track-row'}`}
                           >
                             <div className="w-5 shrink-0 flex items-center justify-center">
@@ -1294,7 +1318,7 @@ export default function PlaylistDetailPage({ playlist, onBack }) {
                             </div>
                             <div className="w-9 h-9 rounded overflow-hidden bg-surface-600 shrink-0">
                               {track.cover_path
-                                ? <img src={/^https?:\/\//.test(track.cover_path) ? track.cover_path : `file://${track.cover_path}`} alt="" className="w-full h-full object-cover" />
+                                ? <img src={listCoverSrc(track)} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />
                                 : <div className="w-full h-full flex items-center justify-center text-white/20 text-xs">♪</div>
                               }
                             </div>
@@ -1321,7 +1345,8 @@ export default function PlaylistDetailPage({ playlist, onBack }) {
                           </div>
                         </div>
                       )
-                    })}
+                      }}
+                    />
                   </>
                 )}
               </div>
@@ -1342,18 +1367,22 @@ export default function PlaylistDetailPage({ playlist, onBack }) {
             }
             const groupsMap = groups.reduce((m, g) => { m[g.id] = g; return m }, {})
             return (
-              <div className="flex flex-col gap-0.5">
-                {displayed.map((track, i) => {
+              <VirtualRows
+                items={displayed}
+                rowHeight={FLAT_ROW_SLOT}
+                scrollRef={listScrollRef}
+                renderRow={(track, i) => {
                   const active     = currentTrack?.id === track.id
                   const trackGroup = track.group_id ? groupsMap[track.group_id] : null
                   return (
-                    <div key={track.id} className="relative">
+                    // Fixed slot: 58px row + 2px gap (pb-0.5) — must equal FLAT_ROW_SLOT
+                    <div key={track.id} className="relative pb-0.5" style={{ height: FLAT_ROW_SLOT }}>
                       {trackGroup && (
-                        <div className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full" style={{ backgroundColor: trackGroup.color }} />
+                        <div className="absolute left-0 top-1.5 bottom-2 w-0.5 rounded-full" style={{ backgroundColor: trackGroup.color }} />
                       )}
                       <div
                         onDoubleClick={() => handlePlay(track)}
-                        className={`flex items-center gap-3 py-2.5 rounded-lg transition-colors group cursor-pointer
+                        className={`flex items-center gap-3 py-2.5 h-full rounded-lg transition-colors group cursor-pointer
                           ${trackGroup ? 'pl-4 pr-3' : 'px-3'}
                           ${active ? 'bg-brand-600/25 border border-brand-400/20 shadow-sm shadow-black/15' : 'playlist-track-row'}`}
                       >
@@ -1366,7 +1395,7 @@ export default function PlaylistDetailPage({ playlist, onBack }) {
                         </div>
                         <div className="w-9 h-9 rounded overflow-hidden bg-surface-600 shrink-0">
                           {track.cover_path
-                            ? <img src={/^https?:\/\//.test(track.cover_path) ? track.cover_path : `file://${track.cover_path}`} alt="" className="w-full h-full object-cover" />
+                            ? <img src={listCoverSrc(track)} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />
                             : <div className="w-full h-full flex items-center justify-center text-white/20 text-xs">♪</div>
                           }
                         </div>
@@ -1412,8 +1441,8 @@ export default function PlaylistDetailPage({ playlist, onBack }) {
                       </div>
                     </div>
                   )
-                })}
-              </div>
+                }}
+              />
             )
           })()
         )}

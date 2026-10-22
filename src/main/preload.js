@@ -25,6 +25,12 @@ contextBridge.exposeInMainWorld('electron', {
     exportAll:          ()      => ipcRenderer.invoke('library:exportAll'),
     importAll:          ()      => ipcRenderer.invoke('library:importAll'),
     importVirtualTrack: (track) => ipcRenderer.invoke('library:importVirtualTrack', track),
+    // Fired when background cover thumbnails were generated — reload tracks to use them
+    onThumbsUpdated: (cb) => {
+      const handler = () => cb()
+      ipcRenderer.on('library:thumbsUpdated', handler)
+      return () => ipcRenderer.removeListener('library:thumbsUpdated', handler)
+    },
   },
 
   // Downloads
@@ -102,6 +108,13 @@ contextBridge.exposeInMainWorld('electron', {
     get:    (key)        => ipcRenderer.invoke('settings:get', key),
     set:    (key, value) => ipcRenderer.invoke('settings:set', key, value),
     getAll: ()           => ipcRenderer.invoke('settings:getAll'),
+  },
+
+  // Player session (queue + playback state, stored apart from settings)
+  player: {
+    getSession: ()      => ipcRenderer.invoke('player:getSession'),
+    saveState:  (state) => ipcRenderer.invoke('player:saveState', state),
+    saveQueue:  (queue) => ipcRenderer.invoke('player:saveQueue', queue),
   },
 
   // Appearance

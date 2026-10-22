@@ -3,7 +3,8 @@ import {
   Play, Pause, SkipBack, SkipForward,
   Volume2, VolumeX, Shuffle, ListMusic, X, Music2,
 } from 'lucide-react'
-import { usePlayer } from '../store/PlayerContext'
+import { usePlayer, usePlayerProgress } from '../store/PlayerContext'
+import { coverSrc } from '../utils/covers'
 
 function formatTime(secs) {
   if (!secs || isNaN(secs)) return '0:00'
@@ -21,9 +22,7 @@ function CoverImg({ track, size = 'sm' }) {
       </div>
     )
   }
-  const src = /^https?:\/\//.test(track.cover_path)
-    ? track.cover_path
-    : `file://${track.cover_path}`
+  const src = coverSrc(track.cover_path)
   return (
     <img src={src} alt="" className={`${dim} rounded-lg object-cover shrink-0`} />
   )
@@ -87,9 +86,10 @@ function QueuePanel({ onClose }) {
 
 export default function PlayerBar({ onOpenNowPlaying }) {
   const {
-    currentTrack, isPlaying, progress, duration, volume, shuffle,
+    currentTrack, isPlaying, volume, shuffle,
     togglePlay, skipNext, skipPrev, seek, setVolume, setShuffle,
   } = usePlayer()
+  const { progress, duration } = usePlayerProgress()
 
   const progressRef  = useRef(null)
   const [showQueue,    setShowQueue]    = useState(false)
@@ -141,9 +141,7 @@ export default function PlayerBar({ onOpenNowPlaying }) {
   }, [dragging, seek])
 
   const displayProgress = dragging ? dragProgress : progress
-  const coverSrc = currentTrack?.cover_path
-    ? (/^https?:\/\//.test(currentTrack.cover_path) ? currentTrack.cover_path : `file://${currentTrack.cover_path}`)
-    : null
+  const barCover = coverSrc(currentTrack?.cover_path)
 
   return (
     <div className="h-[72px] m-2.5 mt-0 rounded-2xl shrink-0 relative
@@ -154,8 +152,8 @@ export default function PlayerBar({ onOpenNowPlaying }) {
       {/* Capa + info da faixa */}
       <div className="flex items-center gap-3 w-60 shrink-0">
         <div className="w-11 h-11 rounded-xl overflow-hidden bg-surface-600 shrink-0 shadow-md shadow-black/30">
-          {coverSrc
-            ? <img src={coverSrc} alt="capa" className="w-full h-full object-cover" />
+          {barCover
+            ? <img src={barCover} alt="capa" className="w-full h-full object-cover" />
             : <div className="w-full h-full flex items-center justify-center text-white/15">
                 <Music2 size={18} />
               </div>

@@ -3,6 +3,7 @@ import {
   X, Save, Sliders, FileText, Youtube, Volume2,
   ListMusic, Check, Plus, Scissors, Trash2,
 } from 'lucide-react'
+import { coverSrc } from '../utils/covers'
 
 function formatTime(seconds) {
   const value = Math.max(0, Math.floor(Number(seconds) || 0))
@@ -216,7 +217,7 @@ export default function MaestroModal({ track, onClose, onSave }) {
                     <div key={pl.id} className="flex items-center gap-2.5 py-2 px-2 rounded-xl hover:bg-white/4">
                       <div className="w-8 h-8 rounded-lg overflow-hidden bg-surface-600 shrink-0">
                         {pl.cover_url
-                          ? <img src={pl.cover_url} alt="" className="w-full h-full object-cover" />
+                          ? <img src={coverSrc(pl.cover_url)} alt="" className="w-full h-full object-cover" />
                           : <div className="w-full h-full flex items-center justify-center text-white/20"><ListMusic size={12} /></div>
                         }
                       </div>

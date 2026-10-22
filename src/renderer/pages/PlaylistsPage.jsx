@@ -4,6 +4,7 @@ import {
   Plus, ListMusic, Trash2, Pencil, X, Check, Search, ExternalLink,
   Upload, Download, Copy, GitMerge, Loader2, Play, MoreHorizontal,
 } from 'lucide-react'
+import { coverSrc } from '../utils/covers'
 
 /* ── Modais ─────────────────────────────────────────────────────── */
 
@@ -63,7 +64,7 @@ function CreateModal({ onClose, onCreate }) {
             </div>
             {coverUrl && (
               <div className="mt-3 w-16 h-16 rounded-xl overflow-hidden border border-white/10">
-                <img src={coverUrl} alt="preview" className="w-full h-full object-cover" />
+                <img src={coverSrc(coverUrl)} alt="preview" className="w-full h-full object-cover" />
               </div>
             )}
           </div>
@@ -129,7 +130,7 @@ function MergeModal({ playlists, onClose, onMerge }) {
                 />
                 <div className="w-10 h-10 rounded-xl overflow-hidden bg-surface-600 shrink-0">
                   {p.cover_url
-                    ? <img src={p.cover_url} alt="" className="w-full h-full object-cover" />
+                    ? <img src={coverSrc(p.cover_url)} alt="" className="w-full h-full object-cover" />
                     : <div className="w-full h-full flex items-center justify-center text-white/20"><ListMusic size={15} /></div>
                   }
                 </div>
@@ -223,7 +224,7 @@ function PlaylistCard({ p, onOpen, onEdit, onDuplicate, onExport, onDelete, edit
       {/* Cover */}
       <div className="relative aspect-square rounded-xl overflow-hidden bg-surface-700 shadow-lg shadow-black/30">
         {p.cover_url ? (
-          <img src={p.cover_url} alt={p.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.04]" />
+          <img src={coverSrc(p.cover_url)} alt={p.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.04]" />
         ) : (
           <div className="w-full h-full flex items-center justify-center bg-surface-700">
             <ListMusic size={40} strokeWidth={0.8} className="text-white/12" />

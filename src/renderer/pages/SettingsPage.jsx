@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { getUpdateLogByVersion } from '../data/updateLogs'
+import { mediaSrc } from '../utils/covers'
 
 const BROWSERS = [
   { value: 'auto',    label: 'Auto-detectar' },
@@ -356,8 +357,8 @@ export default function SettingsPage() {
             <div className="aspect-video rounded-xl overflow-hidden bg-surface-700 border border-white/6 mb-3">
               {wallpaperSrc ? (
                 wallpaperType === 'video'
-                  ? <video src={wallpaperSrc} className={`w-full h-full object-cover ${wallpaperMode === 'blur' ? 'blur-sm scale-105' : ''} ${wallpaperMode === 'transparent' ? 'opacity-45' : ''}`} muted loop autoPlay playsInline />
-                  : <img   src={wallpaperSrc} className={`w-full h-full object-cover ${wallpaperMode === 'blur' ? 'blur-sm scale-105' : ''} ${wallpaperMode === 'transparent' ? 'opacity-45' : ''}`} alt="Wallpaper" />
+                  ? <video src={mediaSrc(wallpaperSrc)}className={`w-full h-full object-cover ${wallpaperMode === 'blur' ? 'blur-sm scale-105' : ''} ${wallpaperMode === 'transparent' ? 'opacity-45' : ''}`} muted loop autoPlay playsInline />
+                  : <img   src={mediaSrc(wallpaperSrc)}className={`w-full h-full object-cover ${wallpaperMode === 'blur' ? 'blur-sm scale-105' : ''} ${wallpaperMode === 'transparent' ? 'opacity-45' : ''}`} alt="Wallpaper" />
               ) : (
                 <div className="w-full h-full flex flex-col items-center justify-center text-white/15 gap-2">
                   <ImageIcon size={26} strokeWidth={1.2} />

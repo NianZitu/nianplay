@@ -66,10 +66,10 @@ module.exports = function registerLufsHandlers(ipcMain, mainWindow) {
   ipcMain.handle('lufs:equalizePlaylist', async (_, { anchorTrackId, playlistId }) => {
     try {
       const db = getDB()
-      const tracks = db.tracks.read()
+      const trackById = new Map(db.tracks.read().map(t => [t.id, t]))
       const pt = db.playlistTracks.read().filter(r => r.playlist_id === playlistId)
 
-      const anchorTrack = tracks.find(t => t.id === anchorTrackId)
+      const anchorTrack = trackById.get(anchorTrackId)
       if (!anchorTrack) return { error: 'Faixa âncora não encontrada' }
 
       sendProgress({ phase: 'measuring_anchor', done: 0, total: pt.length + 1 })
@@ -77,10 +77,11 @@ module.exports = function registerLufsHandlers(ipcMain, mainWindow) {
       if (anchorResult.error) return { error: `Erro na faixa âncora: ${anchorResult.error}` }
 
       const anchorLufs = anchorResult.lufs
+      const gainById = new Map()
       let done = 1
 
       for (const row of pt) {
-        const track = tracks.find(t => t.id === row.track_id)
+        const track = trackById.get(row.track_id)
         if (!track) { done++; continue }
 
         sendProgress({ phase: 'measuring', trackId: track.id, title: track.title, done, total: pt.length + 1 })
@@ -90,16 +91,20 @@ module.exports = function registerLufsHandlers(ipcMain, mainWindow) {
           // Clamp gain so we never boost/cut more than MAX_GAIN_DB
           const raw    = anchorLufs - result.lufs
           const gainDb = Math.max(-MAX_GAIN_DB, Math.min(MAX_GAIN_DB, raw))
-          const idx    = tracks.findIndex(t => t.id === track.id)
-          if (idx !== -1) tracks[idx] = { ...tracks[idx], gain: parseFloat(gainDb.toFixed(2)) }
+          gainById.set(track.id, parseFloat(gainDb.toFixed(2)))
         }
         done++
       }
 
       // Also set anchor track gain to 0 (it IS the reference)
-      const anchorIdx = tracks.findIndex(t => t.id === anchorTrackId)
-      if (anchorIdx !== -1) tracks[anchorIdx] = { ...tracks[anchorIdx], gain: 0 }
+      gainById.set(anchorTrackId, 0)
 
+      // Measuring takes a while — apply gains to the library as it is NOW, so edits
+      // made during the analysis (scan, Maestro, sync) are not overwritten
+      const tracks = db.tracks.read()
+      tracks.forEach((t, i) => {
+        if (gainById.has(t.id)) tracks[i] = { ...t, gain: gainById.get(t.id) }
+      })
       db.tracks.write(tracks)
       sendProgress({ phase: 'done', done: pt.length + 1, total: pt.length + 1, anchorLufs })
       return { ok: true, anchorLufs }

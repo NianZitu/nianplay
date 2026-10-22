@@ -168,6 +168,7 @@ async function linkDownloadedFile(trackId, opts, downloadId) {
       updated_at: Date.now(),
     }
     db.tracks.write(tracks)
+    require('../thumbnails').scheduleThumbnails()
     console.log('[Downloader] Linked', best.full, '→ track', trackId)
   } catch (err) {
     console.error('[Downloader] linkDownloadedFile error:', err.message)

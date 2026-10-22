@@ -2,6 +2,8 @@ const path = require('path')
 const fs   = require('fs')
 const { v4: uuidv4 } = require('uuid')
 const { getDB } = require('../db')
+const { findTrackMatch } = require('../trackMatch')
+const { scheduleThumbnails } = require('../thumbnails')
 
 const AUDIO_EXTENSIONS = new Set(['.mp3', '.flac', '.wav', '.aac', '.ogg', '.m4a', '.opus', '.wma'])
 
@@ -14,36 +16,6 @@ function normalizeCutSegments(cuts) {
     }))
     .filter(cut => cut.end > cut.start)
     .sort((a, b) => a.start - b.start)
-}
-
-function findTrackMatch(tracks, track) {
-  const norm = s => (s || '').toLowerCase().trim()
-  if (track.yt_url) {
-    const byUrl = tracks.find(t => t.yt_url && t.yt_url === track.yt_url)
-    if (byUrl) return byUrl
-  }
-
-  const title = norm(track.title)
-  const artist = norm(track.artist)
-  const album = norm(track.album)
-  const duration = Math.round(track.duration || 0)
-
-  let matches = tracks.filter(t =>
-    norm(t.title) === title &&
-    norm(t.artist) === artist &&
-    Math.abs(Math.round(t.duration || 0) - duration) <= 2
-  )
-  if (matches.length === 1) return matches[0]
-
-  matches = tracks.filter(t =>
-    norm(t.title) === title &&
-    norm(t.artist) === artist &&
-    norm(t.album) === album
-  )
-  if (matches.length === 1) return matches[0]
-
-  matches = tracks.filter(t => norm(t.title) === title && norm(t.artist) === artist)
-  return matches.length === 1 ? matches[0] : null
 }
 
 async function scanDirectory(dirPath) {
@@ -117,7 +89,9 @@ async function scanDirectory(dirPath) {
 module.exports = function registerLibraryHandlers(ipcMain) {
   ipcMain.handle('library:scan', async (_, folderPath) => {
     if (!folderPath || !fs.existsSync(folderPath)) return { error: 'Invalid folder' }
-    return await scanDirectory(folderPath)
+    const result = await scanDirectory(folderPath)
+    if (result.added) scheduleThumbnails()
+    return result
   })
 
   ipcMain.handle('library:getTracks', () => {
@@ -137,6 +111,7 @@ module.exports = function registerLibraryHandlers(ipcMain) {
     const tracks = getDB().tracks.read()
     const idx = tracks.findIndex(t => t.id === updated.id)
     if (idx === -1) return false
+    const coverChanged = 'cover_path' in updated && updated.cover_path !== tracks[idx].cover_path
     tracks[idx] = {
       ...tracks[idx],
       ...updated,
@@ -144,6 +119,7 @@ module.exports = function registerLibraryHandlers(ipcMain) {
       updated_at: Date.now(),
     }
     getDB().tracks.write(tracks)
+    if (coverChanged) scheduleThumbnails()
     return true
   })
 

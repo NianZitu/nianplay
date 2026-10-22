@@ -1,5 +1,6 @@
 const { v4: uuidv4 } = require('uuid')
 const { getDB } = require('../db')
+const { norm, TrackIndex } = require('../trackMatch')
 const path = require('path')
 const fs   = require('fs')
 
@@ -14,38 +15,18 @@ function normalizeCutSegments(cuts) {
     .sort((a, b) => a.start - b.start)
 }
 
-function findTrackMatch(tracks, track) {
-  const norm = s => (s || '').toLowerCase().trim()
-  if (track.yt_url) {
-    const byUrl = tracks.find(t => t.yt_url && t.yt_url === track.yt_url)
-    if (byUrl) return byUrl
+// Map key → first matching row (same result as Array.find, but O(1) per lookup)
+function indexFirst(rows, keyFn) {
+  const map = new Map()
+  for (const row of rows) {
+    const key = keyFn(row)
+    if (!map.has(key)) map.set(key, row)
   }
-
-  const title = norm(track.title)
-  const artist = norm(track.artist)
-  const album = norm(track.album)
-  const duration = Math.round(track.duration || 0)
-
-  let matches = tracks.filter(t =>
-    norm(t.title) === title &&
-    norm(t.artist) === artist &&
-    Math.abs(Math.round(t.duration || 0) - duration) <= 2
-  )
-  if (matches.length === 1) return matches[0]
-
-  matches = tracks.filter(t =>
-    norm(t.title) === title &&
-    norm(t.artist) === artist &&
-    norm(t.album) === album
-  )
-  if (matches.length === 1) return matches[0]
-
-  matches = tracks.filter(t => norm(t.title) === title && norm(t.artist) === artist)
-  return matches.length === 1 ? matches[0] : null
+  return map
 }
 
 function importPlaylistData(data, fallbackName = 'Playlist Importada') {
-  if (!data || !Array.isArray(data.tracks)) return { error: 'Formato nÃ£o reconhecido' }
+  if (!data || !Array.isArray(data.tracks)) return { error: 'Formato não reconhecido' }
 
   const db = getDB()
   const allTracks = db.tracks.read()
@@ -62,17 +43,15 @@ function importPlaylistData(data, fallbackName = 'Playlist Importada') {
   playlists.unshift(playlist)
   db.playlists.write(playlists)
 
-  const norm = s => (s || '').toLowerCase().trim()
   const pt = db.playlistTracks.read()
   const importIndexToTrackId = {}
+  const index = new TrackIndex(allTracks)
   let created = 0
 
   for (let i = 0; i < data.tracks.length; i++) {
     const imp = data.tracks[i]
-    const impTitle = norm(imp.title)
-    const impArtist = norm(imp.artist)
 
-    let match = findTrackMatch(allTracks, imp)
+    let match = index.match(imp)
 
     if (!match) {
       match = {
@@ -93,10 +72,11 @@ function importPlaylistData(data, fallbackName = 'Playlist Importada') {
         updated_at: Date.now(),
       }
       allTracks.push(match)
+      index.add(match)
       created++
     } else {
       let changed = false
-      if (!match.yt_url && imp.yt_url)       { match.yt_url = imp.yt_url; changed = true }
+      if (!match.yt_url && imp.yt_url)       { match.yt_url = imp.yt_url; index.noteUrl(match); changed = true }
       if (!match.lyrics && imp.lyrics)       { match.lyrics = imp.lyrics; changed = true }
       if (!match.cover_path && imp.cover_url){ match.cover_path = imp.cover_url; changed = true }
       if (!match.gain && imp.gain)           { match.gain = imp.gain; changed = true }
@@ -132,9 +112,10 @@ function importPlaylistData(data, fallbackName = 'Playlist Importada') {
     db.playlistGroups.write(groups)
 
     const ptFinal = db.playlistTracks.read()
+    const rowByTrack = indexFirst(ptFinal.filter(r => r.playlist_id === playlist.id), r => r.track_id)
     data.tracks.forEach((imp, i) => {
       if (!imp.group_name || !(imp.group_name in groupNameToId)) return
-      const row = ptFinal.find(r => r.playlist_id === playlist.id && r.track_id === importIndexToTrackId[i])
+      const row = rowByTrack.get(importIndexToTrackId[i])
       if (row) {
         row.group_id = groupNameToId[imp.group_name]
         row.group_position = imp.group_position ?? 0
@@ -156,10 +137,13 @@ module.exports = function registerPlaylistHandlers(ipcMain) {
   ipcMain.handle('playlists:getAll', () => {
     const db = getDB()
     const playlists = db.playlists.read()
-    const pt = db.playlistTracks.read()
+    const counts = new Map()
+    for (const row of db.playlistTracks.read()) {
+      counts.set(row.playlist_id, (counts.get(row.playlist_id) || 0) + 1)
+    }
     return playlists.map(p => ({
       ...p,
-      trackCount: pt.filter(t => t.playlist_id === p.id).length,
+      trackCount: counts.get(p.id) || 0,
     })).sort((a, b) => b.created_at - a.created_at)
   })
 
@@ -194,9 +178,9 @@ module.exports = function registerPlaylistHandlers(ipcMain) {
     const pt = db.playlistTracks.read()
       .filter(t => t.playlist_id === playlistId)
       .sort((a, b) => a.position - b.position)
-    const tracks = db.tracks.read()
+    const trackById = new Map(db.tracks.read().map(t => [t.id, t]))
     return pt.map(row => {
-      const track = tracks.find(t => t.id === row.track_id)
+      const track = trackById.get(row.track_id)
       if (!track) return null
       return { ...track, position: row.position ?? 0, group_id: row.group_id || null, group_position: row.group_position ?? 0 }
     }).filter(Boolean)
@@ -223,8 +207,9 @@ module.exports = function registerPlaylistHandlers(ipcMain) {
   ipcMain.handle('playlists:reorder', (_, { playlistId, orderedTrackIds }) => {
     const db = getDB()
     const pt = db.playlistTracks.read()
+    const rowByTrack = indexFirst(pt.filter(r => r.playlist_id === playlistId), r => r.track_id)
     orderedTrackIds.forEach((trackId, i) => {
-      const row = pt.find(r => r.playlist_id === playlistId && r.track_id === trackId)
+      const row = rowByTrack.get(trackId)
       if (row) row.position = i
     })
     db.playlistTracks.write(pt)
@@ -304,8 +289,11 @@ module.exports = function registerPlaylistHandlers(ipcMain) {
   ipcMain.handle('playlists:reorderGroup', (_, { playlistId, groupId, orderedTrackIds }) => {
     const db = getDB()
     const pt = db.playlistTracks.read()
+    const rowByTrack = indexFirst(
+      pt.filter(r => r.playlist_id === playlistId && r.group_id === groupId), r => r.track_id
+    )
     orderedTrackIds.forEach((trackId, i) => {
-      const row = pt.find(r => r.playlist_id === playlistId && r.group_id === groupId && r.track_id === trackId)
+      const row = rowByTrack.get(trackId)
       if (row) row.group_position = i
     })
     db.playlistTracks.write(pt)
@@ -427,13 +415,13 @@ module.exports = function registerPlaylistHandlers(ipcMain) {
     const pt = db.playlistTracks.read()
       .filter(r => r.playlist_id === playlistId)
       .sort((a, b) => a.position - b.position)
-    const allTracks  = db.tracks.read()
+    const trackById  = new Map(db.tracks.read().map(t => [t.id, t]))
     const allGroups  = db.playlistGroups.read().filter(g => g.playlist_id === playlistId)
     // Build lookup: group id → group name
     const groupById  = allGroups.reduce((m, g) => { m[g.id] = g; return m }, {})
 
     const tracks = pt.map(row => {
-      const t = allTracks.find(t => t.id === row.track_id)
+      const t = trackById.get(row.track_id)
       if (!t) return null
       return {
         title:          t.title,
@@ -517,9 +505,7 @@ module.exports = function registerPlaylistHandlers(ipcMain) {
     db.playlists.write(playlists)
 
     // For each track: find match in library with tiered strategy, or create virtual track
-    const UNKNOWN = new Set(['desconhecido', 'unknown', 'desconocido', ''])
-    const norm = s => (s || '').toLowerCase().trim()
-
+    const index = new TrackIndex(allTracks)
     const pt = db.playlistTracks.read()
     let added = 0
     let created = 0
@@ -527,47 +513,41 @@ module.exports = function registerPlaylistHandlers(ipcMain) {
     // Map import index → matched track id — used later for group assignment
     // to guarantee we use the SAME track that was stored in the playlist row
     const importIndexToTrackId = {}
+    // The playlist is brand new, so only rows added in this loop can collide
+    const addedTrackIds = new Set()
 
     for (let i = 0; i < data.tracks.length; i++) {
       const imp = data.tracks[i]
-      const impTitle  = norm(imp.title)
-      const impArtist = norm(imp.artist)
+      const impTitle = norm(imp.title)
 
-      // 1. yt_url match (most reliable)
-      let match = imp.yt_url
-        ? allTracks.find(t => t.yt_url && t.yt_url === imp.yt_url)
-        : null
+      // Safe match first (yt_url, or title + artist identifying a single track).
+      // The looser tiers below only run when it finds nothing — they were always
+      // overridden by it anyway.
+      let match = index.match(imp)
 
-      // 2. Exact title + artist match
       if (!match) {
-        match = allTracks.find(t =>
-          norm(t.title) === impTitle && norm(t.artist) === impArtist
-        )
-      }
+        // (The yt_url tier can't hit here: index.match already checks it.)
+        // 2. Exact title + artist match
+        let candidate = index.firstWithTitleArtist(imp)
 
-      // 3. Title match only — covers "Desconhecido" vs real artist, or re-tagged files
-      if (!match) {
-        match = allTracks.find(t =>
-          norm(t.title) === impTitle && t.file_path  // real file only
-        )
-      }
+        // 3. Title match only — covers "Desconhecido" vs real artist, or re-tagged files
+        if (!candidate) candidate = index.withTitle(imp.title).find(t => t.file_path) || null  // real file only
 
-      // 4. Duration-guided title fuzzy — same title prefix and duration within 3s
-      if (!match && imp.duration) {
-        match = allTracks.find(t =>
-          t.file_path &&
-          Math.abs((t.duration || 0) - imp.duration) <= 3 &&
-          (norm(t.title).startsWith(impTitle.slice(0, 8)) || impTitle.startsWith(norm(t.title).slice(0, 8)))
-        )
-      }
+        // 4. Duration-guided title fuzzy — same title prefix and duration within 3s
+        if (!candidate && imp.duration) {
+          candidate = allTracks.find(t =>
+            t.file_path &&
+            Math.abs((t.duration || 0) - imp.duration) <= 3 &&
+            (norm(t.title).startsWith(impTitle.slice(0, 8)) || impTitle.startsWith(norm(t.title).slice(0, 8)))
+          ) || null
+        }
 
-      const safeMatch = findTrackMatch(allTracks, imp)
-      if (safeMatch) {
-        match = safeMatch
-      } else if (match) {
-        const sameTitle = allTracks.filter(t => norm(t.title) === impTitle)
-        const durationMismatch = imp.duration && Math.abs((match.duration || 0) - imp.duration) > 2
-        if (sameTitle.length > 1 || durationMismatch) match = null
+        // Only accept a loose candidate when it is unambiguous
+        if (candidate) {
+          const sameTitleCount   = index.withTitle(imp.title).length
+          const durationMismatch = imp.duration && Math.abs((candidate.duration || 0) - imp.duration) > 2
+          if (!(sameTitleCount > 1 || durationMismatch)) match = candidate
+        }
       }
 
       if (!match) {
@@ -591,11 +571,12 @@ module.exports = function registerPlaylistHandlers(ipcMain) {
           updated_at: Date.now(),
         }
         allTracks.push(match)
+        index.add(match)
         created++
       } else {
         // Merge metadata missing from local track
         let changed = false
-        if (!match.yt_url && imp.yt_url)   { match.yt_url  = imp.yt_url;  changed = true }
+        if (!match.yt_url && imp.yt_url)   { match.yt_url  = imp.yt_url;  index.noteUrl(match); changed = true }
         if (!match.lyrics && imp.lyrics)   { match.lyrics  = imp.lyrics;  changed = true }
         if (!match.gain   && imp.gain)     { match.gain    = imp.gain;    changed = true }
         if ((!match.cut_segments || match.cut_segments.length === 0) && imp.cut_segments?.length) {
@@ -606,7 +587,8 @@ module.exports = function registerPlaylistHandlers(ipcMain) {
 
       importIndexToTrackId[i] = match.id  // remember which track was used
 
-      if (!pt.find(r => r.playlist_id === playlist.id && r.track_id === match.id)) {
+      if (!addedTrackIds.has(match.id)) {
+        addedTrackIds.add(match.id)
         pt.push({ id: uuidv4(), playlist_id: playlist.id, track_id: match.id, position: i })
         added++
       }
@@ -633,12 +615,13 @@ module.exports = function registerPlaylistHandlers(ipcMain) {
       // Assign group memberships using the importIndexToTrackId map
       // (guarantees same track_id that was written to playlistTracks)
       const ptFinal = db.playlistTracks.read()
+      const rowByTrack = indexFirst(ptFinal.filter(r => r.playlist_id === playlist.id), r => r.track_id)
       data.tracks.forEach((imp, i) => {
         if (!imp.group_name || !(imp.group_name in groupNameToId)) return
         const groupId = groupNameToId[imp.group_name]
         const trackId = importIndexToTrackId[i]
         if (!trackId) return
-        const row = ptFinal.find(r => r.playlist_id === playlist.id && r.track_id === trackId)
+        const row = rowByTrack.get(trackId)
         if (row) {
           row.group_id       = groupId
           row.group_position = imp.group_position ?? 0

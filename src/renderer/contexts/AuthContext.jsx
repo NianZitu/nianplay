@@ -404,7 +404,7 @@ export function AuthProvider({ children }) {
           if (localPtKeys.has(key)) continue
           let match = findTrackMatch(allTracks || [], pt)
           if (!match) {
-            const imported = await window.electron.library.importVirtualTrack({
+            const payload = {
               title:     pt.title    || '',
               artist:    pt.artist   || '',
               album:     pt.album    || '',
@@ -415,11 +415,16 @@ export function AuthProvider({ children }) {
               gain:      pt.gain     || 0,
               cut_segments: normalizeCutSegments(pt.cut_segments),
               file_path: '',
-            })
+            }
+            const imported = await window.electron.library.importVirtualTrack(payload)
             if (imported?.id) {
-              const refreshed = await window.electron.library.getTracks()
-              match = refreshed?.find(t => t.id === imported.id)
-              if (match) allTracks.push(match)
+              // Avoid re-fetching the whole library for every imported track:
+              // reuse the local copy, or build the entry from what was just sent
+              match = allTracks.find(t => t.id === imported.id)
+              if (!match) {
+                match = { ...payload, id: imported.id }
+                allTracks.push(match)
+              }
             }
           }
           if (match) {

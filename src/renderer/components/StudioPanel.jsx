@@ -4,19 +4,14 @@ import {
   Volume2, VolumeX, List, AlignLeft, Maximize2,
   Music2,
 } from 'lucide-react'
-import { usePlayer } from '../store/PlayerContext'
+import { usePlayer, usePlayerProgress } from '../store/PlayerContext'
+import { listCoverSrc, coverSrc } from '../utils/covers'
 
 function formatTime(secs) {
   if (!secs || isNaN(secs)) return '0:00'
   const m = Math.floor(secs / 60)
   const s = Math.floor(secs % 60).toString().padStart(2, '0')
   return `${m}:${s}`
-}
-
-function buildCoverUrl(p) {
-  if (!p) return null
-  if (p.startsWith('http://') || p.startsWith('https://') || p.startsWith('file://')) return p
-  return 'file:///' + p.replace(/\\/g, '/').split('/').map(encodeURIComponent).join('/')
 }
 
 function VUBars({ isPlaying }) {
@@ -27,6 +22,8 @@ function VUBars({ isPlaying }) {
           key={i}
           className="w-[3px] bg-brand-500 rounded-full"
           style={isPlaying ? {
+            height: '12px',
+            transformOrigin: 'bottom',
             animation: `vuPulse ${dur}ms ease-in-out infinite alternate`,
             animationDelay: `${i * 60}ms`,
           } : { height: '2px', opacity: 0.3 }}
@@ -36,22 +33,12 @@ function VUBars({ isPlaying }) {
   )
 }
 
-export default function StudioPanel({ onOpenFullscreen }) {
-  const {
-    currentTrack, progress, duration, seek,
-    isPlaying, togglePlay, skipNext, skipPrev,
-    shuffle, setShuffle, playQueueIndex,
-    volume, setVolume, queue, currentIdx, upcomingItems,
-  } = usePlayer()
-
-  const [activeTab,    setActiveTab]    = useState('queue')
-  const [coverError,   setCoverError]   = useState(false)
-  const [showVolume,   setShowVolume]   = useState(false)
+// Isolated so the ~4Hz progress updates only re-render this bar, not the whole panel
+function ProgressSection({ currentTrack, seek }) {
+  const { progress, duration } = usePlayerProgress()
   const [dragging,     setDragging]     = useState(false)
   const [dragProgress, setDragProgress] = useState(0)
   const progressRef = useRef(null)
-
-  useEffect(() => { setCoverError(false) }, [currentTrack?.id])
 
   function getProgressRatio(clientX) {
     if (!progressRef.current) return 0
@@ -87,9 +74,50 @@ export default function StudioPanel({ onOpenFullscreen }) {
     }
   }, [dragging, seek])
 
-  const cover = currentTrack ? buildCoverUrl(currentTrack.cover_path) : null
   const displayProgress = dragging ? dragProgress : (progress || 0)
   const pct   = displayProgress * 100
+
+  return (
+    <div className="flex flex-col gap-1">
+      <div
+        ref={progressRef}
+        onMouseDown={handleProgressMouseDown}
+        className="group relative w-full h-[3px] rounded-full cursor-pointer overflow-visible"
+        style={{ background: 'rgba(255,255,255,0.06)' }}
+      >
+        <div
+          className="absolute left-0 top-0 h-full bg-brand-500 rounded-full transition-none"
+          style={{ width: `${pct}%` }}
+        />
+        <div
+          className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3 h-3 rounded-full bg-white
+                     shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
+          style={{ left: `${pct}%` }}
+        />
+      </div>
+      <div className="flex justify-between text-[9px] text-white/20 tabular-nums">
+        <span>{formatTime(displayProgress * (duration || 0))}</span>
+        <span>{formatTime(duration || 0)}</span>
+      </div>
+    </div>
+  )
+}
+
+export default function StudioPanel({ onOpenFullscreen }) {
+  const {
+    currentTrack, seek,
+    isPlaying, togglePlay, skipNext, skipPrev,
+    shuffle, setShuffle, playQueueIndex,
+    volume, setVolume, queue, currentIdx, upcomingItems,
+  } = usePlayer()
+
+  const [activeTab,    setActiveTab]    = useState('queue')
+  const [coverError,   setCoverError]   = useState(false)
+  const [showVolume,   setShowVolume]   = useState(false)
+
+  useEffect(() => { setCoverError(false) }, [currentTrack?.id])
+
+  const cover = currentTrack ? coverSrc(currentTrack.cover_path) : null
 
   // Full display queue: current track first, then upcoming (upcomingItems has correct queueIndex even in shuffle)
   const displayQueue = queue.length > 0
@@ -170,28 +198,7 @@ export default function StudioPanel({ onOpenFullscreen }) {
       <div className="shrink-0 px-4 pt-3 pb-2 flex flex-col gap-3">
 
         {/* Progress bar */}
-        <div className="flex flex-col gap-1">
-          <div
-            ref={progressRef}
-            onMouseDown={handleProgressMouseDown}
-            className="group relative w-full h-[3px] rounded-full cursor-pointer overflow-visible"
-            style={{ background: 'rgba(255,255,255,0.06)' }}
-          >
-            <div
-              className="absolute left-0 top-0 h-full bg-brand-500 rounded-full transition-none"
-              style={{ width: `${pct}%` }}
-            />
-            <div
-              className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3 h-3 rounded-full bg-white
-                         shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
-              style={{ left: `${pct}%` }}
-            />
-          </div>
-          <div className="flex justify-between text-[9px] text-white/20 tabular-nums">
-            <span>{formatTime(displayProgress * (duration || 0))}</span>
-            <span>{formatTime(duration || 0)}</span>
-          </div>
-        </div>
+        <ProgressSection currentTrack={currentTrack} seek={seek} />
 
         {/* Transport row */}
         <div className="flex items-center justify-between px-1">
@@ -300,7 +307,7 @@ export default function StudioPanel({ onOpenFullscreen }) {
                 >
                   <div className="w-7 h-7 rounded-md overflow-hidden bg-surface-600 shrink-0 relative">
                     {track.cover_path ? (
-                      <img src={buildCoverUrl(track.cover_path)} alt="" className="w-full h-full object-cover" />
+                      <img src={listCoverSrc(track)} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-white/15 text-[9px]">♪</div>
                     )}
@@ -309,7 +316,7 @@ export default function StudioPanel({ onOpenFullscreen }) {
                         <div className="flex items-end gap-[2px] h-2.5">
                           {[1,2,3].map(i => (
                             <div key={i} className="w-[2px] bg-brand-400 rounded-full"
-                              style={{ animation: `vuPulse ${300 + i * 80}ms ease-in-out infinite alternate`, animationDelay: `${i * 50}ms` }} />
+                              style={{ height: '10px', transformOrigin: 'bottom', animation: `vuPulse ${300 + i * 80}ms ease-in-out infinite alternate`, animationDelay: `${i * 50}ms` }} />
                           ))}
                         </div>
                       </div>

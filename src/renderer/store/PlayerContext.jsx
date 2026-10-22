@@ -1,6 +1,10 @@
-import React, { createContext, useContext, useRef, useState, useCallback } from 'react'
+import React, { createContext, useContext, useRef, useState, useCallback, useMemo } from 'react'
+import { mediaUrl } from '../utils/covers'
 
 const PlayerContext = createContext(null)
+// Progress/duration change ~4x per second while playing. They live in their own
+// context so only the progress bars re-render, not every page using usePlayer().
+const PlayerProgressContext = createContext(null)
 
 function fisherYates(arr) {
   const a = [...arr]
@@ -97,6 +101,7 @@ export function PlayerProvider({ children }) {
   const [groupsEnabled,setGroupsEnabledState] = useState(false)
   const restoringRef = useRef(false)
   const persistTimerRef = useRef(null)
+  const persistQueueTimerRef = useRef(null)
 
   // Keep refs in sync every render
   queueRef.current         = queue
@@ -113,6 +118,9 @@ export function PlayerProvider({ children }) {
   function ensureAudioElement() {
     if (!audioRef.current) {
       audioRef.current = new Audio()
+      // Audio comes from nianmedia:// (another origin than the UI). Without CORS mode the
+      // MediaElementSource → GainNode chain outputs silence for cross-origin media.
+      audioRef.current.crossOrigin = 'anonymous'
       audioRef.current.addEventListener('timeupdate', () => {
         skipCutSegmentIfNeeded()
         syncPlaybackClock()
@@ -159,11 +167,11 @@ export function PlayerProvider({ children }) {
     return { ctx: contextRef.current, gain: gainRef.current }
   }
 
-  function persistSession() {
-    if (!window.electron?.settings?.set || restoringRef.current) return
-    const q = queueRef.current || []
-    const session = {
-      queue: q,
+  // Small, frequent: index/time/volume/shuffle. The (large) queue is saved separately
+  // by persistQueue() only when it changes.
+  function persistState() {
+    if (!window.electron?.player || restoringRef.current) return
+    window.electron.player.saveState({
       currentIdx: currentIdxRef.current,
       currentTime: audioRef.current?.currentTime || 0,
       volume: volumeRef.current,
@@ -171,8 +179,12 @@ export function PlayerProvider({ children }) {
       shuffledOrder: shuffledOrderRef.current,
       shuffledPos: shuffledPosRef.current,
       groupsEnabled: groupsEnabledRef.current,
-    }
-    window.electron.settings.set('playerSession', session).catch(() => {})
+    }).catch(() => {})
+  }
+
+  function persistQueue() {
+    if (!window.electron?.player || restoringRef.current) return
+    window.electron.player.saveQueue(queueRef.current || []).catch(() => {})
   }
 
   // Build a shuffled order starting from the given queue index
@@ -195,7 +207,7 @@ export function PlayerProvider({ children }) {
     currentIdxRef.current = queueIdx
     setCurrentIdx(queueIdx)
     currentTrackRef.current = track
-    audioRef.current.src = `file://${track.file_path}`
+    audioRef.current.src = mediaUrl(track.file_path)
     if (gainNodeRef.current) gainNodeRef.current.gain.value = Math.pow(10, (track.gain || 0) / 20)
     audioRef.current.volume = volumeRef.current
     audioRef.current.play().then(() => setIsPlaying(true)).catch(console.error)
@@ -254,7 +266,7 @@ export function PlayerProvider({ children }) {
       buildShuffleOrder(safeIdx, q.length)
     }
 
-    audioRef.current.src = `file://${track.file_path}`
+    audioRef.current.src = mediaUrl(track.file_path)
     gain.gain.value = Math.pow(10, (track.gain || 0) / 20)
     audioRef.current.volume = volumeRef.current
     audioRef.current.play().then(() => setIsPlaying(true)).catch(console.error)
@@ -381,11 +393,12 @@ export function PlayerProvider({ children }) {
   React.useEffect(() => {
     let alive = true
     async function restoreSession() {
-      if (!window.electron?.settings?.get) return
+      if (!window.electron?.player) return
       restoringRef.current = true
       try {
-        const saved = await window.electron.settings.get('playerSession')
-        if (!alive || !saved || !Array.isArray(saved.queue) || saved.queue.length === 0) return
+        const session = await window.electron.player.getSession()
+        const saved = { ...(session?.state || {}), queue: session?.queue }
+        if (!alive || !Array.isArray(saved.queue) || saved.queue.length === 0) return
 
         const safeIdx = Math.max(0, Math.min(Number(saved.currentIdx) || 0, saved.queue.length - 1))
         setQueue(saved.queue)
@@ -414,7 +427,7 @@ export function PlayerProvider({ children }) {
             source.connect(gain)
             audio._connected = true
           }
-          audio.src = `file://${track.file_path}`
+          audio.src = mediaUrl(track.file_path)
           gain.gain.value = Math.pow(10, (track.gain || 0) / 20)
           audio.volume = volumeRef.current
           const resumeAt = Math.max(0, Number(saved.currentTime) || 0)
@@ -436,23 +449,35 @@ export function PlayerProvider({ children }) {
 
   React.useEffect(() => {
     clearTimeout(persistTimerRef.current)
-    persistTimerRef.current = setTimeout(() => persistSession(), 350)
+    persistTimerRef.current = setTimeout(() => persistState(), 350)
     return () => clearTimeout(persistTimerRef.current)
-  }, [queue, currentIdx, volume, shuffle, shuffledOrder, shuffledPos, groupsEnabled, isPlaying])
+  }, [currentIdx, volume, shuffle, shuffledOrder, shuffledPos, groupsEnabled, isPlaying])
+
+  React.useEffect(() => {
+    clearTimeout(persistQueueTimerRef.current)
+    persistQueueTimerRef.current = setTimeout(() => {
+      persistQueueTimerRef.current = null
+      persistQueue()
+    }, 500)
+    return () => clearTimeout(persistQueueTimerRef.current)
+  }, [queue])
 
   React.useEffect(() => {
     function handleBeforeUnload() {
-      persistSession()
+      persistState()
+      // A queue change may still be waiting on its debounce
+      if (persistQueueTimerRef.current) persistQueue()
     }
     window.addEventListener('beforeunload', handleBeforeUnload)
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
   }, [])
 
+  // Keep the resume position fresh while playing (state only — the queue is not resent)
   React.useEffect(() => {
-    if (!queue.length) return
-    const id = setInterval(() => persistSession(), 5000)
+    if (!queue.length || !isPlaying) return
+    const id = setInterval(() => persistState(), 5000)
     return () => clearInterval(id)
-  }, [queue.length])
+  }, [queue.length, isPlaying])
 
   const updateQueuedTrack = useCallback((updatedTrack) => {
     if (!updatedTrack?.id) return
@@ -471,7 +496,7 @@ export function PlayerProvider({ children }) {
   }, [])
 
   // Upcoming queue: tracks that will play next (in shuffled or normal order)
-  const upcomingItems = (() => {
+  const upcomingItems = useMemo(() => {
     if (queue.length === 0) return []
     if (shuffle && shuffledOrder.length > 0) {
       return shuffledOrder.slice(shuffledPos + 1)
@@ -485,29 +510,39 @@ export function PlayerProvider({ children }) {
       after.push({ track: queue[queueIndex], queueIndex })
     }
     return after
-  })()
+  }, [queue, shuffle, shuffledOrder, shuffledPos, currentIdx])
 
-  const upcomingTracks = upcomingItems.map(item => item.track)
+  const upcomingTracks = useMemo(() => upcomingItems.map(item => item.track), [upcomingItems])
+
+  const value = useMemo(() => ({
+    queue, setQueue,
+    currentTrack, currentIdx,
+    isPlaying,
+    volume,
+    shuffle, setShuffle: handleSetShuffle,
+    shuffledOrder, shuffledPos,
+    upcomingTracks,
+    anchorTrack, setAnchorTrack,
+    groupsEnabled, setGroupsEnabled,
+    playTrack, playNext, playQueueIndex, togglePlay, skipNext, skipPrev, seek, setVolume,
+    updateQueuedTrack,
+    upcomingItems,
+    gainNode: gainRef,
+    audioContext: contextRef,
+  }), [
+    queue, currentTrack, currentIdx, isPlaying, volume, shuffle, shuffledOrder, shuffledPos,
+    upcomingTracks, upcomingItems, anchorTrack, groupsEnabled,
+    handleSetShuffle, setGroupsEnabled, playTrack, playNext, playQueueIndex, togglePlay,
+    skipNext, skipPrev, seek, setVolume, updateQueuedTrack,
+  ])
+
+  const progressValue = useMemo(() => ({ progress, duration }), [progress, duration])
 
   return (
-    <PlayerContext.Provider value={{
-      queue, setQueue,
-      currentTrack, currentIdx,
-      isPlaying,
-      progress, duration,
-      volume,
-      shuffle, setShuffle: handleSetShuffle,
-      shuffledOrder, shuffledPos,
-      upcomingTracks,
-      anchorTrack, setAnchorTrack,
-      groupsEnabled, setGroupsEnabled,
-      playTrack, playNext, playQueueIndex, togglePlay, skipNext, skipPrev, seek, setVolume,
-      updateQueuedTrack,
-      upcomingItems,
-      gainNode: gainRef,
-      audioContext: contextRef,
-    }}>
-      {children}
+    <PlayerContext.Provider value={value}>
+      <PlayerProgressContext.Provider value={progressValue}>
+        {children}
+      </PlayerProgressContext.Provider>
     </PlayerContext.Provider>
   )
 }
@@ -515,5 +550,12 @@ export function PlayerProvider({ children }) {
 export function usePlayer() {
   const ctx = useContext(PlayerContext)
   if (!ctx) throw new Error('usePlayer must be used inside PlayerProvider')
+  return ctx
+}
+
+// Only for components that display the playback position (progress bars, timers)
+export function usePlayerProgress() {
+  const ctx = useContext(PlayerProgressContext)
+  if (!ctx) throw new Error('usePlayerProgress must be used inside PlayerProvider')
   return ctx
 }

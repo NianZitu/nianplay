@@ -2,11 +2,17 @@ const { app, BrowserWindow, ipcMain } = require('electron')
 const path = require('path')
 const fs   = require('fs')
 const http = require('http')
+const { registerMediaScheme, handleMediaProtocol } = require('./mediaProtocol')
 const isDev = process.env.NODE_ENV === 'development'
 
 let mainWindow
 let staticServer
 const STATIC_PORT = 17654
+const DEV_ORIGIN  = 'http://localhost:5173'
+const PROD_ORIGIN = `http://localhost:${STATIC_PORT}`
+
+// Local audio/covers/wallpapers are served via nianmedia:// (see mediaProtocol.js)
+registerMediaScheme()
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -70,8 +76,7 @@ async function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      webSecurity: false,
-      webviewTag: true,
+      // webSecurity stays on (default): local media comes through nianmedia://, not file://
     },
   })
 
@@ -133,6 +138,8 @@ async function ensureYtDlp() {
 }
 
 app.whenReady().then(async () => {
+  // The UI origin in use comes first (default CORS origin)
+  handleMediaProtocol(isDev ? [DEV_ORIGIN, PROD_ORIGIN] : [PROD_ORIGIN, DEV_ORIGIN])
   await createWindow()
 
   ipcMain.handle('app:getVersion', () => app.getVersion())
@@ -141,6 +148,7 @@ app.whenReady().then(async () => {
   require('./handlers/library')(ipcMain)
   require('./handlers/downloader')(ipcMain, mainWindow)
   require('./handlers/settings')(ipcMain)
+  require('./handlers/player')(ipcMain)
   require('./handlers/window')(ipcMain, mainWindow)
   require('./handlers/playlists')(ipcMain)
   require('./handlers/spotify')(ipcMain)
@@ -151,6 +159,11 @@ app.whenReady().then(async () => {
   require('./handlers/appearance')(ipcMain)
   require('./handlers/updater')(ipcMain, mainWindow)
 
+  // Generate small cover thumbnails in the background; tell the UI when there are new ones
+  require('./thumbnails').initThumbnails(() => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('library:thumbsUpdated')
+  })
+
   // Download yt-dlp in background (non-blocking)
   ensureYtDlp().catch(console.error)
 
@@ -158,6 +171,10 @@ app.whenReady().then(async () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
 })
+
+// DB writes are debounced/async — persist anything pending before the process exits
+app.on('before-quit', () => require('./db').flushAllSync())
+app.on('will-quit',   () => require('./db').flushAllSync())
 
 app.on('window-all-closed', () => {
   if (staticServer) {

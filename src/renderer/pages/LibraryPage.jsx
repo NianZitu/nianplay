@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef, useMemo } from 'react'
 import {
   FolderOpen, RefreshCw, Search, Music2, Play, Settings2, Trash2,
   AlertTriangle, X, ListPlus, CheckSquare, Square, ListMusic,
@@ -6,6 +6,8 @@ import {
 } from 'lucide-react'
 import { usePlayer } from '../store/PlayerContext'
 import MaestroModal from '../components/MaestroModal'
+import VirtualRows from '../components/VirtualRows'
+import { listCoverSrc, coverSrc } from '../utils/covers'
 
 function formatDuration(secs) {
   if (!secs) return '--:--'
@@ -70,7 +72,7 @@ function AddToPlaylistModal({ tracks, onClose }) {
             <div key={pl.id} className="flex items-center gap-3 py-2 px-2 rounded-xl hover:bg-white/4">
               <div className="w-9 h-9 rounded-lg overflow-hidden bg-surface-600 shrink-0">
                 {pl.cover_url
-                  ? <img src={pl.cover_url} alt="" className="w-full h-full object-cover" />
+                  ? <img src={coverSrc(pl.cover_url)} alt="" className="w-full h-full object-cover" />
                   : <div className="w-full h-full flex items-center justify-center text-white/20"><ListMusic size={14} /></div>
                 }
               </div>
@@ -102,11 +104,11 @@ function TrackCover({ track }) {
       </div>
     )
   }
-  const src = /^https?:\/\//.test(track.cover_path)
-    ? track.cover_path
-    : `file://${track.cover_path}`
-  return <img src={src} alt="" className="w-9 h-9 rounded-lg object-cover shrink-0" />
+  return <img src={listCoverSrc(track)} alt="" loading="lazy" decoding="async" className="w-9 h-9 rounded-lg object-cover shrink-0" />
 }
+
+// Exact height of a track row (h-14). Rows are virtualized, so this must match the CSS.
+const ROW_HEIGHT = 56
 
 export default function LibraryPage() {
   const [tracks,     setTracks]     = useState([])
@@ -122,8 +124,18 @@ export default function LibraryPage() {
 
   const { playTrack, playNext, currentTrack, isPlaying, updateQueuedTrack } = usePlayer()
   const isElectron = !!window.electron
+  const listScrollRef = useRef(null)
 
   useEffect(() => { loadTracks() }, [])
+
+  // New cover thumbnails were generated in the background: refresh the rows only
+  // (keeps search and selection; the list order is the same)
+  useEffect(() => {
+    return window.electron?.library?.onThumbsUpdated?.(async () => {
+      const data = await window.electron.library.getTracks()
+      if (data) setTracks(data)
+    })
+  }, [])
 
   async function loadTracks() {
     if (!isElectron) return
@@ -186,13 +198,15 @@ export default function LibraryPage() {
     }
   }
 
-  const filtered = tracks.filter(t => {
-    if (!query) return true
+  const filtered = useMemo(() => {
+    if (!query) return tracks
     const q = query.toLowerCase()
-    return t.title?.toLowerCase().includes(q)
-        || t.artist?.toLowerCase().includes(q)
-        || t.album?.toLowerCase().includes(q)
-  })
+    return tracks.filter(t =>
+      t.title?.toLowerCase().includes(q)
+      || t.artist?.toLowerCase().includes(q)
+      || t.album?.toLowerCase().includes(q)
+    )
+  }, [tracks, query])
 
   function playFrom(track) { playTrack(track, filtered) }
 
@@ -334,7 +348,7 @@ export default function LibraryPage() {
           {/* Cabeçalho da tabela */}
           <div className="grid items-center px-4 py-2 text-[10px] text-white/35 font-bold uppercase
                           tracking-widest border-b border-white/6 sticky top-0 bg-surface-900/90
-                          backdrop-blur-md shrink-0"
+                          shrink-0"
                style={{ gridTemplateColumns: '1.5rem 1.5rem 2.5rem 1fr 1fr 1fr 4.5rem 2rem 2rem 2rem' }}>
             <button onClick={toggleAll} className="flex items-center justify-center text-white/30 hover:text-white/65">
               {allChecked
@@ -351,15 +365,19 @@ export default function LibraryPage() {
             <span /><span /><span />
           </div>
 
-          <div className="flex-1 overflow-y-auto">
-            {filtered.map((track, idx) => {
+          <div ref={listScrollRef} className="flex-1 overflow-y-auto">
+            <VirtualRows
+              items={filtered}
+              rowHeight={ROW_HEIGHT}
+              scrollRef={listScrollRef}
+              renderRow={(track, idx) => {
               const active  = currentTrack?.id === track.id
               const checked = checkedIds.has(track.id)
               return (
                 <div
                   key={track.id}
                   onDoubleClick={() => playFrom(track)}
-                  className={`grid items-center px-4 py-2.5 group cursor-pointer transition-colors duration-100
+                  className={`grid items-center px-4 h-14 group cursor-pointer transition-colors duration-100
                     ${active   ? 'bg-brand-600/15 text-brand-300'
                     : checked  ? 'bg-white/6'
                     :            'hover:bg-white/4 text-white/80'}`}
@@ -427,7 +445,8 @@ export default function LibraryPage() {
                   </button>
                 </div>
               )
-            })}
+              }}
+            />
           </div>
         </div>
       )}

@@ -3,12 +3,7 @@ import { collection, getDocs, orderBy, query } from 'firebase/firestore'
 import { DownloadCloud, ListMusic, Loader2, RefreshCw, Search, Users, Plus } from 'lucide-react'
 import { db } from '../firebase'
 import { useAuth } from '../contexts/AuthContext'
-
-function coverSrc(src) {
-  if (!src) return ''
-  if (/^https?:\/\//.test(src) || src.startsWith('file://')) return src
-  return `file://${src}`
-}
+import { coverSrc } from '../utils/covers'
 
 const FRAME_STYLE = {
   classic: { border: '#d97706', glow: '' },

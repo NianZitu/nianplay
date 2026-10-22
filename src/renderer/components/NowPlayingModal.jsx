@@ -3,7 +3,8 @@ import {
   X, Search, Save, ChevronDown, ExternalLink,
   SkipBack, SkipForward, Play, Pause, Shuffle, Disc3, ImageIcon,
 } from 'lucide-react'
-import { usePlayer } from '../store/PlayerContext'
+import { usePlayer, usePlayerProgress } from '../store/PlayerContext'
+import { coverSrc } from '../utils/covers'
 
 function formatTime(secs) {
   if (!secs || isNaN(secs)) return '0:00'
@@ -43,9 +44,10 @@ function VinylDisc({ cover, isPlaying }) {
 
 export default function NowPlayingModal({ onClose }) {
   const {
-    currentTrack, progress, duration, seek,
+    currentTrack, seek,
     isPlaying, togglePlay, skipNext, skipPrev, shuffle, setShuffle,
   } = usePlayer()
+  const { progress, duration } = usePlayerProgress()
   const progressRef = useRef(null)
 
   const [coverInput,    setCoverInput]    = useState('')
@@ -66,15 +68,10 @@ export default function NowPlayingModal({ onClose }) {
 
   useEffect(() => { setCoverError(false) }, [currentTrack?.id])
 
-  if (!currentTrack) return null
-  const track = freshTrack || currentTrack
+  // Ignore a fetched copy that belongs to the previous track
+  const track = (freshTrack?.id === currentTrack?.id && freshTrack) || currentTrack
 
-  function buildCoverUrl(p) {
-    if (!p) return null
-    if (p.startsWith('http://') || p.startsWith('https://') || p.startsWith('file://')) return p
-    return 'file:///' + p.replace(/\\/g, '/').split('/').map(encodeURIComponent).join('/')
-  }
-  const cover = buildCoverUrl(track.cover_path)
+  const cover = track ? coverSrc(track.cover_path) : null
 
   function getProgressRatio(clientX) {
     if (!progressRef.current) return 0
@@ -125,6 +122,9 @@ export default function NowPlayingModal({ onClose }) {
     setFreshTrack(prev => ({ ...prev, cover_path: raw }))
     setCoverInput('')
   }
+
+  // Early return only after every hook has run (Rules of Hooks)
+  if (!currentTrack) return null
 
   const displayProgress = dragging ? dragProgress : progress
 

@@ -89,16 +89,22 @@
     @apply bg-surface-800/95 border border-white/6 rounded-2xl;
   }
 
-  /* ── Com wallpaper ── */
+  /* ── Com wallpaper ──
+     Performance: backdrop-blur only on large, few containers (panels).
+     Per-item elements (inputs, buttons, list rows) use a slightly more opaque
+     solid background instead — hundreds of blurred layers were the main GPU cost. */
   .has-wallpaper .card,
-  .has-wallpaper .panel,
-  .has-wallpaper .input-base {
+  .has-wallpaper .panel {
     @apply bg-surface-900/80 border-white/12 backdrop-blur-md shadow-lg shadow-black/25;
   }
 
+  .has-wallpaper .input-base {
+    @apply bg-surface-900/85 border-white/12 shadow-lg shadow-black/25;
+  }
+
   .has-wallpaper .btn-ghost {
-    @apply bg-surface-900/50 hover:bg-surface-900/75 border border-white/8
-           backdrop-blur-md shadow-sm shadow-black/20;
+    @apply bg-surface-900/60 hover:bg-surface-900/80 border border-white/8
+           shadow-sm shadow-black/20;
   }
 
   .has-wallpaper .btn-primary {
@@ -110,11 +116,11 @@
   }
 
   .wallpaper-row {
-    @apply bg-surface-900/40 hover:bg-surface-900/65 backdrop-blur-sm;
+    @apply bg-surface-900/55 hover:bg-surface-900/75;
   }
 
   .playlist-track-row {
-    @apply bg-surface-900/50 hover:bg-surface-900/70 backdrop-blur-sm border border-white/4
+    @apply bg-surface-900/60 hover:bg-surface-900/75 border border-white/4
            shadow-sm shadow-black/10;
   }
 
@@ -232,9 +238,11 @@
 }
 
 /* ── VU meter bars ── */
+/* Animates transform (compositor-only) instead of height, which forced layout every frame.
+   Bars set their full height inline + transform-origin: bottom. */
 @keyframes vuPulse {
-  from { height: 2px; }
-  to   { height: 12px; }
+  from { transform: scaleY(0.17); }
+  to   { transform: scaleY(1); }
 }
 
 /* ── Grain texture overlay ── */

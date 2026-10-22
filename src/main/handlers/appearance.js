@@ -1,6 +1,6 @@
 const path = require('path')
 const fs = require('fs')
-const { pathToFileURL } = require('url')
+const { mediaUrl } = require('../mediaProtocol')
 const { app, dialog, BrowserWindow } = require('electron')
 const { getDB } = require('../db')
 
@@ -49,7 +49,7 @@ module.exports = function registerAppearanceHandlers(ipcMain) {
     fs.copyFileSync(source, dest)
 
     const wallpaper = {
-      src: `${pathToFileURL(dest).toString()}?v=${Date.now()}`,
+      src: `${mediaUrl(dest)}?v=${Date.now()}`,
       type,
       mode: getDB().settings.read().accountWallpaper?.mode || 'normal',
       file_path: dest,
