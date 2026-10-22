@@ -20,6 +20,8 @@ Autorizou publicar direto.
   Salvar desativado; `youtu.be/ID?si=...` aceito e salvo como `watch?v=ID`; digitar troca da opção listada para a
   personalizada e voltar para a opção mantém o texto; limpar o campo tira a seleção; salvou exatamente as 2 escolhas;
   sem erros no console ✅ · `vite build` ✅
+- **Publicado ✅** https://github.com/NianZitu/nianplay/releases/tag/v1.1.27 — commit `975a753`. Conferido pela API
+  pública: "latest", 4 arquivos, `latest.yml` idêntico ao local.
 
 ---
 
