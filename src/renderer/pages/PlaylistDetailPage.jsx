@@ -385,6 +385,9 @@ async function searchYoutubeCandidates(track) {
   return []
 }
 
+// Marks "Link personalizado" as the choice for a track (the url itself lives in `customs`)
+const CUSTOM = '__custom__'
+
 // "Verificar links": lists tracks without a (valid) link and, with the user's OK, searches
 // YouTube and lets them pick the right video for each one. Only chosen links are saved.
 function LinkCheckModal({ tracks, onClose, onSaved }) {
@@ -393,14 +396,19 @@ function LinkCheckModal({ tracks, onClose, onSaved }) {
     .map(t => ({ track: t, problem: linkProblem(t.yt_url) }))
     .filter(p => p.problem))
   const [searches,  setSearches]  = useState({})   // trackId → { status: 'searching'|'done'|'error', options, error }
-  const [choices,   setChoices]   = useState({})   // trackId → url | null (null = "nenhuma destas")
+  const [choices,   setChoices]   = useState({})   // trackId → url | CUSTOM | null (null = "nenhuma destas")
+  const [customs,   setCustoms]   = useState({})   // trackId → link typed in "Link personalizado"
   const [running,   setRunning]   = useState(false)
   const [saving,    setSaving]    = useState(false)
   const [savedCount, setSavedCount] = useState(null)
   const stopRef = useRef(false)
 
   const searchedCount = Object.values(searches).filter(s => s.status === 'done' || s.status === 'error').length
-  const chosen = Object.entries(choices).filter(([, url]) => url)
+  // Resolved picks: a listed option's url, or the custom link (canonical) when it is a valid YouTube video
+  const chosen = Object.entries(choices)
+    .map(([id, c]) => [id, c === CUSTOM ? (youtubeVideoId(customs[id]) ? canonicalUrl(customs[id]) : '') : c])
+    .filter(([, url]) => url)
+  const resolvedChoice = id => chosen.find(([cid]) => cid === id)?.[1] || ''
 
   async function searchOne(track) {
     setSearches(prev => ({ ...prev, [track.id]: { status: 'searching' } }))
@@ -467,7 +475,7 @@ function LinkCheckModal({ tracks, onClose, onSaved }) {
             <div className="px-5 pb-3 shrink-0">
               <div className="rounded-xl border border-white/8 bg-surface-900/60 px-4 py-3 text-xs text-white/55 leading-relaxed">
                 {searchedCount === 0 && !running
-                  ? <>Posso pesquisar cada uma no YouTube e mostrar até 3 vídeos possíveis para você escolher o certo.
+                  ? <>Se já tiver o link certo, cole no campo da faixa. Ou posso pesquisar cada uma no YouTube e mostrar até 3 vídeos possíveis para você escolher o certo.
                       É feita uma busca por faixa, o que pode levar alguns segundos cada. Nada é salvo sem a sua escolha.</>
                   : running
                     ? <span className="flex items-center gap-2"><Loader2 size={12} className="animate-spin text-brand-400" />
@@ -496,7 +504,7 @@ function LinkCheckModal({ tracks, onClose, onSaved }) {
                         ${problem === 'invalid' ? 'text-red-300 border-red-400/30 bg-red-500/10' : 'text-amber-300 border-amber-400/30 bg-amber-500/10'}`}>
                         {problemLabel[problem]}
                       </span>
-                      {choice && <span className="shrink-0 text-[10px] text-green-400 flex items-center gap-1"><Check size={11} /> escolhido</span>}
+                      {resolvedChoice(track.id) && <span className="shrink-0 text-[10px] text-green-400 flex items-center gap-1"><Check size={11} /> escolhido</span>}
                       {!s && !running && (
                         <button onClick={() => searchOne(track)} className="btn-ghost text-xs px-2 py-1 text-brand-400 shrink-0">
                           <Search size={11} className="inline mr-1" />Buscar
@@ -511,9 +519,8 @@ function LinkCheckModal({ tracks, onClose, onSaved }) {
                     {s?.status === 'done' && s.options.length === 0 && (
                       <p className="text-xs text-white/35 mt-2">Nenhum vídeo encontrado no YouTube.</p>
                     )}
-                    {s?.status === 'done' && s.options.length > 0 && (
-                      <div className="mt-2 flex flex-col gap-1">
-                        {s.options.map((opt, i) => {
+                    <div className="mt-2 flex flex-col gap-1">
+                        {s?.status === 'done' && s.options.map((opt, i) => {
                           const selected = choice === opt.url
                           const diff = track.duration && opt.duration ? Math.round(opt.duration - track.duration) : null
                           return (
@@ -548,15 +555,55 @@ function LinkCheckModal({ tracks, onClose, onSaved }) {
                             </label>
                           )
                         })}
-                        <label className={`flex items-center gap-2.5 rounded-lg px-2 py-1 cursor-pointer text-xs
-                          ${choice === null ? 'text-white/70' : 'text-white/35 hover:text-white/60'}`}>
-                          <input type="radio" name={`yt-${track.id}`} checked={choice === null}
-                            onChange={() => setChoices(prev => ({ ...prev, [track.id]: null }))}
-                            className="accent-amber-500" />
-                          Nenhuma destas
-                        </label>
-                      </div>
-                    )}
+
+                        {/* Custom link — for when the user already has the right video and it isn't listed */}
+                        {(() => {
+                          const text = customs[track.id] || ''
+                          const selected = choice === CUSTOM
+                          const valid = Boolean(youtubeVideoId(text))
+                          return (
+                            <div className={`flex items-center gap-2.5 rounded-lg px-2 py-1.5 border transition-colors
+                              ${selected ? (valid ? 'border-brand-400/40 bg-brand-600/15' : 'border-red-400/30 bg-red-500/5') : 'border-transparent'}`}>
+                              <input type="radio" name={`yt-${track.id}`} checked={selected}
+                                onChange={() => setChoices(prev => ({ ...prev, [track.id]: CUSTOM }))}
+                                aria-label="Usar link personalizado"
+                                className="accent-amber-500 shrink-0" />
+                              <input
+                                type="text"
+                                value={text}
+                                onChange={e => {
+                                  const v = e.target.value
+                                  setCustoms(prev => ({ ...prev, [track.id]: v }))
+                                  setChoices(prev => ({ ...prev, [track.id]: v.trim() ? CUSTOM : (prev[track.id] === CUSTOM ? undefined : prev[track.id]) }))
+                                }}
+                                onFocus={() => text.trim() && setChoices(prev => ({ ...prev, [track.id]: CUSTOM }))}
+                                placeholder="Colar link do YouTube..."
+                                className="input-base flex-1 min-w-0 text-xs py-1.5"
+                              />
+                              {text.trim() && (valid
+                                ? <span className="shrink-0 text-[10px] text-green-400 flex items-center gap-1"><Check size={11} /> link válido</span>
+                                : <span className="shrink-0 text-[10px] text-red-400">não é um vídeo do YouTube</span>)}
+                              {valid && (
+                                <button type="button" title="Abrir no YouTube"
+                                  onClick={() => window.electron?.app?.openYoutube?.(text)}
+                                  className="btn-ghost p-1 text-white/30 hover:text-white shrink-0">
+                                  <ExternalLink size={12} />
+                                </button>
+                              )}
+                            </div>
+                          )
+                        })()}
+
+                        {(s?.status === 'done' && s.options.length > 0 || choice !== undefined) && (
+                          <label className={`flex items-center gap-2.5 rounded-lg px-2 py-1 cursor-pointer text-xs
+                            ${choice === null ? 'text-white/70' : 'text-white/35 hover:text-white/60'}`}>
+                            <input type="radio" name={`yt-${track.id}`} checked={choice === null}
+                              onChange={() => setChoices(prev => ({ ...prev, [track.id]: null }))}
+                              className="accent-amber-500" />
+                            Nenhuma destas
+                          </label>
+                        )}
+                    </div>
                   </div>
                 )
               })}

@@ -1,5 +1,15 @@
 export const UPDATE_LOGS = [
   {
+    version: '1.1.27',
+    title: 'Link personalizado na verificacao de links',
+    date: '22/10/2026',
+    changes: [
+      'Verificar links agora tem um campo para colar o link certo do YouTube quando ele nao aparece nas sugestoes.',
+      'O campo funciona mesmo sem pesquisar e confere na hora se o link e de um video do YouTube.',
+      'Links colados em qualquer formato (youtu.be, com playlist ou com ?si=) sao salvos no formato padrao.',
+    ],
+  },
+  {
     version: '1.1.26',
     title: 'Links das musicas corretos e verificacao de links',
     date: '22/10/2026',

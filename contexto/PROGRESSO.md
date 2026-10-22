@@ -6,6 +6,23 @@ Cada entrada: versão, data, o que mudou, por quê, arquivos e status.
 
 ---
 
+## 1.1.27 — 22/10/2026 — Link personalizado no "Verificar links"
+
+**Pedido do usuário:** campo para inserir um link customizado quando o certo não aparece entre as sugestões.
+Autorizou publicar direto.
+
+- `LinkCheckModal` (`PlaylistDetailPage.jsx`): em cada faixa, uma opção de rádio com campo de texto "Colar link do
+  YouTube…", **disponível sem pesquisar**. Digitar seleciona a opção; apagar o texto desfaz a seleção. Validação ao vivo
+  com `youtubeVideoId` ("link válido" / "não é um vídeo do YouTube" — link de playlist é recusado); só conta como
+  escolhido (e para "Salvar N links") quando válido; salvo com `canonicalUrl`; botão para abrir no YouTube.
+  Estado: `choices[trackId] = CUSTOM` (sentinela) + `customs[trackId]` = texto; `chosen` resolve para a URL final.
+- Teste (navegador, dados simulados): campo presente antes da busca e sem disparar busca; link de playlist recusado e
+  Salvar desativado; `youtu.be/ID?si=...` aceito e salvo como `watch?v=ID`; digitar troca da opção listada para a
+  personalizada e voltar para a opção mantém o texto; limpar o campo tira a seleção; salvou exatamente as 2 escolhas;
+  sem erros no console ✅ · `vite build` ✅
+
+---
+
 ## 1.1.26 — 22/10/2026 — Links das músicas corretos + "Verificar links"
 
 **Pedido do usuário:** músicas baixadas (mesmo depois da atualização que deveria salvar o link) vinham com link errado
