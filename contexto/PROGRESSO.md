@@ -44,6 +44,8 @@ sobrepor na nuvem, e o app deve impedir nomes repetidos na conta para não se mi
 - **Não verificável daqui:** se as regras do Firestore permitem ao dono apagar seus docs de `communityPlaylists` (a limpeza
   faz try/catch e só registra no console se falhar). Verificar depois do 1º "Enviar para nuvem" com a 1.1.28: a API pública
   deve mostrar 1 doc por playlist do usuário.
+- **Publicado ✅** https://github.com/NianZitu/nianplay/releases/tag/v1.1.28 — commit `4bd591c` (junto com o código do bot).
+  Conferido pela API pública: "latest", 4 arquivos, `latest.yml` idêntico ao local.
 
  — 07/11/2026 (em desenvolvimento, não publicado)
 
@@ -71,8 +73,8 @@ modo grupo embaralha só a ordem dos grupos intercalando as avulsas, e os comand
 - Os IDs das 6 playlists locais batem com docs da nuvem (o botão gera links válidos).
 
 ### Pendente
+- Código publicado no GitHub com a 1.1.28 ✅ (`install.sh` acessível em raw.githubusercontent.com, sem ``, sintaxe ok).
 - Teste real no Discord (precisa do token do usuário) e instalação na VPS.
-- Publicar o código (`git push`) — o install.sh clona do GitHub — e o app com o botão do link.
 
 ---
 
