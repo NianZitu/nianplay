@@ -167,6 +167,18 @@ app.whenReady().then(async () => {
   require('./handlers/updater')(ipcMain, mainWindow)
 
   // Generate small cover thumbnails in the background; tell the UI when there are new ones
+  // Playlist names must be unique per account (the cloud identifies playlists by account + name).
+  // Older versions allowed duplicates: keep the oldest name, rename the others to "Name (2)"...
+  try {
+    const db = require('./db').getDB()
+    const playlists = db.playlists.read()
+    const renamed = require('./playlistNames').dedupePlaylistNames(playlists)
+    if (renamed.length) {
+      db.playlists.write(playlists)
+      console.log('[Playlists] Renamed duplicated names:', renamed.map(r => `"${r.from}" → "${r.to}"`).join(', '))
+    }
+  } catch (err) { console.error('[Playlists]', err.message) }
+
   // Restore links lost by older versions (files downloaded by the app but scanned without link)
   try { require('./urlRepair').repairTrackUrls() } catch (err) { console.error('[Links]', err.message) }
 

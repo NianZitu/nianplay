@@ -5,12 +5,27 @@ import {
   Upload, Download, Copy, GitMerge, Loader2, Play, MoreHorizontal,
 } from 'lucide-react'
 import { coverSrc } from '../utils/covers'
+import { normalizePlaylistName } from '../firebase'
+
+// Names are unique per account (playlists with the same name would mix in the cloud)
+const nameInUse = (playlists, name, exceptId = null) => {
+  const key = normalizePlaylistName(name)
+  return Boolean(key) && playlists.some(p => p.id !== exceptId && normalizePlaylistName(p.name) === key)
+}
+const NAME_IN_USE_MSG = 'Já existe uma playlist com esse nome. Escolha outro — playlists com o mesmo nome se misturariam na nuvem.'
+
+function NameError({ show, message }) {
+  if (!show) return null
+  return <p className="text-xs text-red-400 mt-1.5 leading-snug">{message || NAME_IN_USE_MSG}</p>
+}
 
 /* ── Modais ─────────────────────────────────────────────────────── */
 
-function CreateModal({ onClose, onCreate }) {
+function CreateModal({ playlists, onClose, onCreate }) {
   const [name,     setName]     = useState('')
   const [coverUrl, setCoverUrl] = useState('')
+  const [error,    setError]    = useState('')
+  const taken = nameInUse(playlists, name)
 
   async function handleChooseCover() {
     if (!window.electron) return
@@ -19,8 +34,9 @@ function CreateModal({ onClose, onCreate }) {
   }
 
   async function handleCreate() {
-    if (!name.trim()) return
-    await onCreate({ name: name.trim(), cover_url: coverUrl })
+    if (!name.trim() || taken) return
+    const res = await onCreate({ name: name.trim(), cover_url: coverUrl })
+    if (res?.error) { setError(res.error); return }
     onClose()
   }
 
@@ -36,11 +52,12 @@ function CreateModal({ onClose, onCreate }) {
             <label className="text-xs text-white/40 mb-1.5 block font-medium">Nome</label>
             <input
               autoFocus type="text" value={name}
-              onChange={e => setName(e.target.value)}
+              onChange={e => { setName(e.target.value); setError('') }}
               onKeyDown={e => { if (e.key === 'Enter') handleCreate() }}
               placeholder="Nome da playlist..."
-              className="input-base w-full"
+              className={`input-base w-full ${taken || error ? 'border-red-500/60' : ''}`}
             />
+            <NameError show={taken || Boolean(error)} message={error} />
           </div>
           <div>
             <label className="text-xs text-white/40 mb-1.5 block font-medium">Capa (opcional)</label>
@@ -71,7 +88,7 @@ function CreateModal({ onClose, onCreate }) {
         </div>
         <div className="modal-footer">
           <button onClick={onClose} className="btn-ghost px-4 py-2 text-sm">Cancelar</button>
-          <button onClick={handleCreate} disabled={!name.trim()} className="btn-primary px-4 py-2 text-sm disabled:opacity-40">Criar</button>
+          <button onClick={handleCreate} disabled={!name.trim() || taken} className="btn-primary px-4 py-2 text-sm disabled:opacity-40">Criar</button>
         </div>
       </div>
     </div>
@@ -82,6 +99,8 @@ function MergeModal({ playlists, onClose, onMerge }) {
   const [selected, setSelected] = useState(new Set())
   const [name,     setName]     = useState('')
   const [merging,  setMerging]  = useState(false)
+  const [error,    setError]    = useState('')
+  const taken = nameInUse(playlists, name)
 
   function toggle(id) {
     setSelected(prev => {
@@ -92,9 +111,11 @@ function MergeModal({ playlists, onClose, onMerge }) {
   }
 
   async function handleMerge() {
-    if (selected.size < 2 || !name.trim()) return
+    if (selected.size < 2 || !name.trim() || taken) return
     setMerging(true)
-    await onMerge({ playlistIds: [...selected], name: name.trim() })
+    const res = await onMerge({ playlistIds: [...selected], name: name.trim() })
+    setMerging(false)
+    if (res?.error) { setError(res.error); return }
     onClose()
   }
 
@@ -115,11 +136,12 @@ function MergeModal({ playlists, onClose, onMerge }) {
             <label className="text-xs text-white/40 mb-1.5 block font-medium">Nome da nova playlist</label>
             <input
               autoFocus value={name}
-              onChange={e => setName(e.target.value)}
+              onChange={e => { setName(e.target.value); setError('') }}
               onKeyDown={e => e.key === 'Enter' && handleMerge()}
               placeholder="Nome..."
-              className="input-base w-full"
+              className={`input-base w-full ${taken || error ? 'border-red-500/60' : ''}`}
             />
+            <NameError show={taken || Boolean(error)} message={error} />
           </div>
           <div className="flex-1 overflow-y-auto flex flex-col gap-0.5 -mx-1">
             {playlists.map(p => (
@@ -149,7 +171,7 @@ function MergeModal({ playlists, onClose, onMerge }) {
           <button onClick={onClose} className="btn-ghost px-4 py-2 text-sm">Cancelar</button>
           <button
             onClick={handleMerge}
-            disabled={selected.size < 2 || !name.trim() || merging}
+            disabled={selected.size < 2 || !name.trim() || merging || taken}
             className="btn-primary px-4 py-2 text-sm disabled:opacity-40 flex items-center gap-2"
           >
             {merging ? <><Loader2 size={13} className="animate-spin" /> Unindo...</> : <><GitMerge size={13} /> Unir {selected.size >= 2 ? `(${selected.size})` : ''}</>}
@@ -162,7 +184,7 @@ function MergeModal({ playlists, onClose, onMerge }) {
 
 /* ── Card de playlist ────────────────────────────────────────────── */
 
-function PlaylistCard({ p, onOpen, onEdit, onDuplicate, onExport, onDelete, editingId, editName, setEditName, submitEdit, cancelEdit, duplicatingId, exportingId }) {
+function PlaylistCard({ p, onOpen, onEdit, onDuplicate, onExport, onDelete, editingId, editName, setEditName, submitEdit, cancelEdit, duplicatingId, exportingId, editNameTaken }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPos,  setMenuPos]  = useState({ top: 0, right: 0 })
   const btnRef    = useRef(null)
@@ -267,9 +289,10 @@ function PlaylistCard({ p, onOpen, onEdit, onDuplicate, onExport, onDelete, edit
               if (e.key === 'Enter') submitEdit(p)
               if (e.key === 'Escape') cancelEdit()
             }}
-            className="input-base text-xs flex-1 py-1.5"
+            className={`input-base text-xs flex-1 py-1.5 ${editNameTaken ? 'border-red-500/60' : ''}`}
+            title={editNameTaken ? NAME_IN_USE_MSG : undefined}
           />
-          <button onClick={() => submitEdit(p)} className="btn-ghost p-1.5 text-green-400"><Check size={12} /></button>
+          <button onClick={() => submitEdit(p)} disabled={editNameTaken} className="btn-ghost p-1.5 text-green-400 disabled:opacity-30"><Check size={12} /></button>
           <button onClick={cancelEdit} className="btn-ghost p-1.5 text-white/30"><X size={12} /></button>
         </div>
       ) : (
@@ -313,8 +336,9 @@ export default function PlaylistsPage({ onOpenPlaylist }) {
 
   async function handleCreate(opts) {
     if (!isElectron) return
-    await window.electron.playlists.create(opts)
-    loadPlaylists()
+    const res = await window.electron.playlists.create(opts)
+    if (!res?.error) loadPlaylists()
+    return res
   }
 
   async function handleDelete(id) {
@@ -330,7 +354,9 @@ export default function PlaylistsPage({ onOpenPlaylist }) {
 
   async function submitEdit(p) {
     if (!editName.trim() || !isElectron) return
-    await window.electron.playlists.update({ id: p.id, name: editName.trim(), cover_url: p.cover_url })
+    if (nameInUse(playlists, editName, p.id)) { showToast(NAME_IN_USE_MSG, false); return }
+    const res = await window.electron.playlists.update({ id: p.id, name: editName.trim(), cover_url: p.cover_url })
+    if (res?.error) { showToast(res.error, false); return }   // keep editing
     setEditingId(null)
     loadPlaylists()
   }
@@ -350,7 +376,9 @@ export default function PlaylistsPage({ onOpenPlaylist }) {
     const res = await window.electron.playlists.import()
     setImporting(false)
     if (res?.ok) {
-      showToast(`Importada "${res.playlist.name}" — ${res.trackCount} faixas (${res.created} novas)`)
+      showToast(res.renamedFrom
+        ? `Importada como "${res.playlist.name}" (já havia uma "${res.renamedFrom}") — ${res.trackCount} faixas`
+        : `Importada "${res.playlist.name}" — ${res.trackCount} faixas (${res.created} novas)`)
       loadPlaylists()
     } else if (!res?.canceled) {
       showToast(res?.error || 'Erro ao importar', false)
@@ -370,7 +398,7 @@ export default function PlaylistsPage({ onOpenPlaylist }) {
     if (!isElectron) return
     const res = await window.electron.playlists.merge(opts)
     if (res?.ok) { showToast(`Unidas em "${opts.name}" — ${res.playlist.trackCount} faixas`); loadPlaylists() }
-    else showToast(res?.error || 'Erro ao unir', false)
+    return res
   }
 
   const totalTracks = playlists.reduce((sum, p) => sum + (p.trackCount ?? 0), 0)
@@ -436,6 +464,7 @@ export default function PlaylistsPage({ onOpenPlaylist }) {
                 onDelete={handleDelete}
                 editingId={editingId}
                 editName={editName}
+                editNameTaken={editingId === p.id && nameInUse(playlists, editName, p.id)}
                 setEditName={setEditName}
                 submitEdit={submitEdit}
                 cancelEdit={() => setEditingId(null)}
@@ -455,7 +484,7 @@ export default function PlaylistsPage({ onOpenPlaylist }) {
         </div>
       )}
 
-      {showCreate && <CreateModal onClose={() => setShowCreate(false)} onCreate={handleCreate} />}
+      {showCreate && <CreateModal playlists={playlists} onClose={() => setShowCreate(false)} onCreate={handleCreate} />}
       {showMerge  && <MergeModal playlists={playlists} onClose={() => setShowMerge(false)} onMerge={handleMerge} />}
     </div>
   )

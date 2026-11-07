@@ -11,9 +11,9 @@ import {
 } from 'firebase/auth'
 import {
   doc, collection, getDocs, setDoc, deleteDoc,
-  writeBatch, serverTimestamp, getDoc,
+  writeBatch, serverTimestamp, getDoc, query, where,
 } from 'firebase/firestore'
-import { auth, db, trackCloudId, playlistCloudId } from '../firebase'
+import { auth, db, trackCloudId, playlistCloudId, normalizePlaylistName } from '../firebase'
 import { urlKey, canonicalUrl } from '../utils/mediaUrl'
 
 const AuthContext = createContext(null)
@@ -203,11 +203,25 @@ export function AuthProvider({ children }) {
         window.electron.playlists.getAll(),
       ])
 
+      // Same name = same cloud document: never upload two local playlists with the same name
+      // (they would merge). The app keeps names unique; this is a last safety net.
+      const seenNames = new Map()
+      const repeated = new Set()
+      for (const pl of (playlists || [])) {
+        const key = normalizePlaylistName(pl.name)
+        if (seenNames.has(key)) repeated.add(pl.name)
+        seenNames.set(key, true)
+      }
+      if (repeated.size) {
+        throw new Error(`Há playlists com o mesmo nome (${[...repeated].join(', ')}). Renomeie antes de enviar para a nuvem.`)
+      }
+
       // Wipe existing cloud data so stale entries don't linger after edits/deletes
       await deleteAllCloudData(user.uid)
 
       const ops = []
       const communityOps = []
+      const publishedIds = new Set()
 
       // Tracks
       for (const t of (tracks || [])) {
@@ -229,7 +243,8 @@ export function AuthProvider({ children }) {
 
       // Playlists + their tracks + groups
       for (const pl of (playlists || [])) {
-        const plId  = playlistCloudId(pl)
+        const plId  = playlistCloudId(pl, user.uid)
+        publishedIds.add(plId)
         const plRef = doc(db, 'users', user.uid, 'playlists', plId)
         ops.push(batch => batch.set(plRef, {
           name:            pl.name            || '',
@@ -308,7 +323,7 @@ export function AuthProvider({ children }) {
             color:      g.color      || '',
             created_at: g.created_at || 0,
           })),
-        }, { merge: true }))
+        }))   // full replace: the cloud copy is exactly the local playlist
       }
 
       await commitInChunks(ops)
@@ -317,6 +332,19 @@ export function AuthProvider({ children }) {
         if (communityOps.length > 0) await commitInChunks(communityOps)
       } catch (communityError) {
         console.warn('[Sync] Community publish skipped:', communityError)
+      }
+
+      // Remove this account's community copies that are not current anymore (deleted/renamed
+      // playlists and the duplicates older versions left behind)
+      try {
+        const mine = await getDocs(query(collection(db, 'communityPlaylists'), where('owner_uid', '==', user.uid)))
+        const stale = mine.docs.filter(d => !publishedIds.has(d.id))
+        if (stale.length) {
+          await commitInChunks(stale.map(d => b => b.delete(d.ref)))
+          console.log(`[Sync] Removed ${stale.length} old community copy(ies)`)
+        }
+      } catch (cleanupError) {
+        console.warn('[Sync] Could not remove old community copies:', cleanupError)
       }
 
       setSyncStatus(s => ({ ...s, uploading: false, lastSync: Date.now() }))
@@ -380,14 +408,13 @@ export function AuthProvider({ children }) {
 
       // Fetch cloud playlists
       const localPlaylists = await window.electron.playlists.getAll()
-      const localPlNames   = new Set((localPlaylists || []).map(p => (p.name || '').toLowerCase()))
 
       const playlistsSnap = await getDocs(collection(db, 'users', user.uid, 'playlists'))
       for (const plDoc of playlistsSnap.docs) {
         const pl = plDoc.data()
-        const plName = (pl.name || '').toLowerCase()
+        const plName = normalizePlaylistName(pl.name)
 
-        let localPl = (localPlaylists || []).find(p => (p.name || '').toLowerCase() === plName)
+        let localPl = (localPlaylists || []).find(p => normalizePlaylistName(p.name) === plName)
         if (!localPl) {
           // Create playlist
           localPl = await window.electron.playlists.create({ name: pl.name, cover_url: pl.cover_url })

@@ -65,6 +65,8 @@ release.bat                Script antigo — NÃO usar: só envia o instalador (
                            versão), manda nota genérica e depende de python3
 release-notes/             Corpo da release no GitHub por versão (é o texto que usuários de versões antigas veem)
 contexto/                  Esta pasta (documentação para IA / histórico)
+bot/                       Bot de Discord do NianPlay (projeto Node separado, NÃO entra no instalador do app).
+                           Ver "Bot de Discord" abaixo e bot/README.md
 ```
 
 ### Dados (userData = `%APPDATA%\nianplay`)
@@ -120,11 +122,42 @@ e `cover_thumb_src` (o `cover_path` de onde ela foi feita). A UI só usa a minia
   `download.files = [{ url, path }]` com o caminho final exato (yt-dlp `--print after_move`); a faixa recebe o link
   pelo caminho (`linkFilesToLibrary`, `startForTrack`, `scanDirectory`, `repairTrackUrls`). Comparar links com
   `urlKey`, gravar com `canonicalUrl`. Para faixas sem evidência, o usuário escolhe em "Verificar links".
+- **Nomes de playlist são únicos por conta** (`main/playlistNames.js`; cópia de `normalizePlaylistName` em
+  `renderer/firebase.js` — manter iguais). O id na nuvem é conta + nome normalizado: mesmo nome = mesmo documento
+  (substitui). Nunca criar/renomear playlist sem passar pelas regras (create/update/merge recusam; duplicate/imports usam
+  `uniqueName`).
 - Casamento de faixas (imports/sync): use `findTrackMatch`/`TrackIndex` de `trackMatch.js`, não reimplemente.
   Ao acrescentar faixas à biblioteca durante um loop com `TrackIndex`, chame `index.add(t)`; ao definir `yt_url`
   numa faixa já indexada, `index.noteUrl(t)`.
 - Em loops no processo principal, indexar com `Map` (ou o helper `indexFirst` em `playlists.js`, que mantém
   a semântica de `Array.find` = primeiro item) em vez de `find()` dentro de `map()/forEach()`.
+
+## Bot de Discord (`bot/`)
+
+Projeto Node separado (CommonJS, Node ≥ 22.12) para rodar numa VPS (Hostinger, Ubuntu). Toca YouTube, Spotify
+(resolvido para YouTube) e playlists da nuvem do NianPlay, **sem baixar arquivos** (yt-dlp `-g` → URL direta do
+áudio → ffmpeg → PCM → `@discordjs/voice` com volume inline; opus por `@discordjs/opus` se compilar, senão `opusscript`).
+`@discordjs/voice` 0.19 já traz o DAVE (criptografia de voz exigida pelo Discord desde 2026).
+
+- **Leitura da nuvem sem segredo:** coleção pública `communityPlaylists` via REST do Firestore com a apiKey pública do app
+  (`bot/src/sources/nianplay.js`). Cada doc tem `tracks` (na ordem, com `yt_url`, `gain`, `cut_segments`, `lyrics`,
+  `group_name`, `group_position`) e `groups`. Desde a 1.1.28 o id é conta + nome e o sync apaga as cópias antigas do
+  dono; a busca por nome do bot ainda prefere o `updatedAt` mais recente (útil enquanto houver cópias antigas).
+- **Link do bot:** botão 🤖 "Copiar link do bot" no detalhe da playlist → `nianplay://playlist/<playlistCloudId>`
+  (confere se o doc existe na nuvem antes de copiar; avisa se a contagem de faixas difere). O bot aceita link, ID ou nome.
+- **Grupos:** `bot/src/queue/grouping.js` replica exatamente `buildGroupedQueue` do app (testado contra uma cópia do
+  algoritmo do app com os mesmos números aleatórios). `/shuffle` na fila com grupos: o resto do grupo atual continua em
+  seguida e o restante é embaralhado por grupos (avulsas intercaladas).
+- **Compatibilidade extra:** aplica `gain` (LUFS) com `volume=XdB` e os `cut_segments` com `aselect` no ffmpeg (seek
+  converte tempo "tocável" → tempo do áudio, mesma lógica do PlayerContext).
+- Faixas sem `yt_url` (NianPlay) e do Spotify são procuradas no YouTube **na hora de tocar**, com a mesma pontuação
+  (`scoreYt`) do app.
+- **Deploy:** `bot/deploy/install.sh` (Node 22, ffmpeg, yt-dlp, usuário `nianplay`, `/opt/nianplay` via clone esparso
+  do repo público, serviço systemd `nianplay-bot` + timer diário `yt-dlp -U`), `bot/deploy/update.sh`. Código de saída
+  78 = erro de configuração (token) → systemd não reinicia em loop.
+- **Risco principal:** IPs de datacenter são bloqueados pelo YouTube ("confirm you're not a bot") → `YTDLP_COOKIES`
+  (cookies.txt de conta secundária). Mensagem amigável já tratada em `ytdlp.js`.
+- Testes: `cd bot && npm test` (grupos vs app, fila do player).
 
 ## Problemas conhecidos / próximos passos
 

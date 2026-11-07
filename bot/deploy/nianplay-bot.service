@@ -1,0 +1,26 @@
+[Unit]
+Description=NianPlay Discord Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=nianplay
+Group=nianplay
+WorkingDirectory=/opt/nianplay/bot
+ExecStart=/usr/bin/node src/index.js
+Restart=always
+RestartSec=5
+# 78 = configuration error (missing/invalid token): wait for the user to fix .env instead of looping
+RestartPreventExitStatus=78
+Environment=NODE_ENV=production
+# yt-dlp keeps its cache here (the home folder is read-only for the service)
+Environment=XDG_CACHE_HOME=/opt/nianplay/bot/.cache
+# Hardening: the bot only needs its own folder
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=read-only
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

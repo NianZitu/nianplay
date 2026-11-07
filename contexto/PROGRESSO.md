@@ -6,6 +6,76 @@ Cada entrada: versão, data, o que mudou, por quê, arquivos e status.
 
 ---
 
+## 1.1.28 — 07/11/2026 — Playlists sem duplicatas na nuvem + nomes únicos + link do bot
+
+**Pedido do usuário:** a nuvem estava duplicando playlists; playlists de mesmo nome do mesmo usuário devem se
+sobrepor na nuvem, e o app deve impedir nomes repetidos na conta para não se misturarem.
+
+### Causa
+- `playlistCloudId` = hash(nome + **data de criação**) → recriar/renomear gerava outro documento.
+- `syncToCloud` limpava só `users/{uid}`; os docs de `communityPlaylists` **nunca eram apagados** (18 docs na nuvem
+  para 6 playlists reais do usuário).
+- Nada impedia duas playlists com o mesmo nome na conta.
+
+### Correção
+- `renderer/firebase.js`: `playlistCloudId(playlist, ownerUid)` = **conta + nome normalizado**, 64 bits (djb2 +
+  FNV-1a, `p_` + 14 caracteres) porque `communityPlaylists` é compartilhada entre contas. `normalizePlaylistName`
+  (NFC, trim, espaços colapsados, minúsculas; acentos contam) — idêntica a `main/playlistNames.js`.
+- `AuthContext.syncToCloud`: usa o id novo; grava a comunidade **sem merge** (substitui); depois apaga os docs da
+  comunidade com `owner_uid == uid` que não estão mais publicados (cópias antigas e playlists apagadas/renomeadas);
+  recusa enviar se houver nomes repetidos. `syncFromCloud` casa playlists pelo nome normalizado.
+- Novo `main/playlistNames.js`: `findByName`, `uniqueName` ("Nome (2)"), `dedupePlaylistNames`.
+  `playlists:create/update/merge` recusam nome em uso (`{ error }`); `duplicate` e imports (arquivo/comunidade) geram
+  nome único e informam `renamedFrom`; novo IPC `playlists:isNameTaken`. Ao abrir o app, nomes repetidos existentes são
+  renomeados (a mais antiga mantém o nome).
+- UI (`PlaylistsPage`): criar/unir mostram aviso ao vivo, borda vermelha e botão bloqueado; renomear mostra borda
+  vermelha, bloqueia ✓ e não fecha a edição se o main recusar; toasts de import informam a renomeação.
+- Botão 🤖 "Copiar link do bot" passa a exigir login (o id depende da conta).
+- **O link do bot muda se a playlist for renomeada** (id = nome) — copiar de novo depois de reenviar.
+
+### Testes
+- 29 verificações com os handlers reais (electron simulado): "Games"/"games"/"  GAMES  " recusados, "Música" ≠ "Musica",
+  nome vazio recusado, espaços limpos, renomear para nome em uso recusado (nome mantido), salvar capa com o mesmo nome e
+  mudar só maiúsculas do próprio nome permitidos, duplicar 2× → "X (Cópia)", "X (Cópia) (2)", unir com nome em uso
+  recusado, import com nome em uso → "Mix (2)" + `renamedFrom`, correção das duplicadas (a mais antiga mantém), id de
+  nuvem: mesma conta+nome → mesmo id (data ignorada), outra conta/outro nome → outro id, formato aceito pelo bot,
+  100 mil ids sem colisão ✅
+- UI no navegador: aviso + borda + "Criar" bloqueado para "  GAMES ", "Musica" liberado, "Road Trip" criado ✅
+- **Não verificável daqui:** se as regras do Firestore permitem ao dono apagar seus docs de `communityPlaylists` (a limpeza
+  faz try/catch e só registra no console se falhar). Verificar depois do 1º "Enviar para nuvem" com a 1.1.28: a API pública
+  deve mostrar 1 doc por playlist do usuário.
+
+ — 07/11/2026 (em desenvolvimento, não publicado)
+
+**Pedido do usuário:** bot para a VPS da Hostinger que toque YouTube e Spotify como os bots comuns, e playlists da
+nuvem do NianPlay: `/nianplay` (link gerado no app ou nome), `/group` (com grupos na ordem do app), `/shuffle` que no
+modo grupo embaralha só a ordem dos grupos intercalando as avulsas, e os comandos padrão.
+
+### Feito
+- Pasta `bot/` (ver CONTEXTO → "Bot de Discord"): 22 comandos — `/play /playnext /nianplay /group /pause /resume /skip
+  /previous /stop /leave /queue /nowplaying /shuffle /loop /volume /seek /remove /move /skipto /clear /lyrics /help`,
+  autocomplete de playlists do NianPlay (nome — faixas · dono · data), botões ⏮⏯⏭🔀🔁⏹ no "Tocando agora".
+- App: botão 🤖 **Copiar link do bot** no detalhe da playlist (`PlaylistDetailPage.jsx`, `handleCopyBotLink`).
+- Deploy: `install.sh`, `update.sh`, unidades systemd, `.env.example`, `README.md` (passo a passo em PT-BR).
+
+### Testado (sem Discord — o token é do usuário)
+- Fontes ao vivo: nuvem do NianPlay (18 docs públicos; link `p_1e876cv` → "ALL FNF" 166 faixas, 143 em grupo, 163 com
+  ganho), busca por nome; YouTube busca/vídeo/playlist (182); Spotify álbum sem credenciais (13) → YouTube correto;
+  faixa sem link → busca correta.
+- Áudio (ffmpeg real, vídeo de 19 s): sem filtro 19,01 s; ganho −3,5 dB = pico ×0,668; seek 5 s → 14,01 s; corte 8–12 →
+  15,01 s; seek + 2 cortes → 10,01 s (todos exatos). ffmpeg ausente não derruba o bot.
+- `npm test`: ordem e shuffle por grupos **idênticos ao algoritmo do app** em 600 playlists aleatórias; fila do player.
+  Os testes acharam e corrigiram 2 bugs: adicionar música durante o carregamento pulava a atual; a 1ª música pedida
+  depois do fim da fila era ignorada.
+- Token ausente/inválido → mensagem clara e saída 78 (sem loop no systemd).
+- Os IDs das 6 playlists locais batem com docs da nuvem (o botão gera links válidos).
+
+### Pendente
+- Teste real no Discord (precisa do token do usuário) e instalação na VPS.
+- Publicar o código (`git push`) — o install.sh clona do GitHub — e o app com o botão do link.
+
+---
+
 ## 1.1.27 — 22/10/2026 — Link personalizado no "Verificar links"
 
 **Pedido do usuário:** campo para inserir um link customizado quando o certo não aparece entre as sugestões.

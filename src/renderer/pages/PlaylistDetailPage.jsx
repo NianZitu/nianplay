@@ -4,8 +4,11 @@ import {
   Trash2, Loader2, CheckCircle2, AlertCircle,
   X, Search, ExternalLink, Pencil, Check, ListPlus, Settings2, Download,
   DownloadCloud, AlertTriangle, FolderOpen, Tag, Folder, ChevronDown, GripVertical,
-  Youtube, Link2, Save,
+  Youtube, Link2, Save, Bot,
 } from 'lucide-react'
+import { doc, getDoc } from 'firebase/firestore'
+import { db, playlistCloudId } from '../firebase'
+import { useAuth } from '../contexts/AuthContext'
 import { canonicalUrl, youtubeVideoId, linkProblem } from '../utils/mediaUrl'
 import { usePlayer } from '../store/PlayerContext'
 import MaestroModal from '../components/MaestroModal'
@@ -1080,6 +1083,8 @@ export default function PlaylistDetailPage({ playlist, onBack }) {
   const [maestroTrack,   setMaestroTrack]   = useState(null)
   const [exporting,      setExporting]      = useState(false)
   const [exportToast,    setExportToast]    = useState(null)
+  const [copyingLink,    setCopyingLink]    = useState(false)
+  const { user } = useAuth() || {}
   const [showYoutubeExport, setShowYoutubeExport] = useState(false)
   const [showMissing,    setShowMissing]    = useState(false)
   const [showLinkCheck,  setShowLinkCheck]  = useState(false)
@@ -1299,6 +1304,43 @@ export default function PlaylistDetailPage({ playlist, onBack }) {
     setDropdownPos({ top, right })
   }
 
+  function flashToast(msg, ms = 4000) {
+    setExportToast(msg)
+    setTimeout(() => setExportToast(null), ms)
+  }
+
+  // Link for the Discord bot (/nianplay, /group). The bot reads the playlist from the cloud, so
+  // it only works after the playlist was sent ("Enviar para nuvem") — checked before copying.
+  async function handleCopyBotLink() {
+    if (!user) {
+      flashToast('Entre na sua conta e envie a playlist para a nuvem para gerar o link do bot.', 6000)
+      return
+    }
+    // Cloud id = account + playlist name (same rule the upload uses)
+    const id = playlistCloudId(playlist, user.uid)
+    const link = `nianplay://playlist/${id}`
+    setCopyingLink(true)
+    try {
+      const snap = await getDoc(doc(db, 'communityPlaylists', id))
+      if (!snap.exists()) {
+        flashToast('Esta playlist ainda não está na nuvem. Envie primeiro (menu da conta → Enviar para nuvem) e copie de novo.', 6000)
+        return
+      }
+      await navigator.clipboard.writeText(link)
+      const cloudCount = snap.data()?.trackCount
+      const outdated = typeof cloudCount === 'number' && cloudCount !== tracks.length
+      flashToast(outdated
+        ? `Link copiado! A versão da nuvem tem ${cloudCount} faixas e a local ${tracks.length} — envie para a nuvem para atualizar.`
+        : 'Link do bot copiado! Cole no /nianplay ou /group do Discord.', outdated ? 6000 : 4000)
+    } catch (e) {
+      // Offline or cloud unavailable: copy anyway, but say it couldn't be verified
+      await navigator.clipboard.writeText(link).catch(() => {})
+      flashToast(`Link copiado, mas não deu para conferir a nuvem (${e.message}).`, 6000)
+    } finally {
+      setCopyingLink(false)
+    }
+  }
+
   async function handleExport() {
     if (!window.electron) return
     setExporting(true)
@@ -1435,6 +1477,9 @@ export default function PlaylistDetailPage({ playlist, onBack }) {
                 </IconBtn>
                 <IconBtn title="Criar no YouTube" onClick={() => setShowYoutubeExport(true)} disabled={!tracks.length}>
                   <Youtube size={15} />
+                </IconBtn>
+                <IconBtn title="Copiar link do bot (para /nianplay e /group no Discord)" onClick={handleCopyBotLink} disabled={!tracks.length}>
+                  {copyingLink ? <Loader2 size={15} className="animate-spin" /> : <Bot size={15} />}
                 </IconBtn>
                 <IconBtn title="Verificar links das faixas" onClick={() => setShowLinkCheck(true)} disabled={!tracks.length}>
                   <Link2 size={15} />

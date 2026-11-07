@@ -1,0 +1,6 @@
+[Unit]
+Description=Atualiza o yt-dlp usado pelo NianPlay Bot
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/yt-dlp -U

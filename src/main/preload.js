@@ -71,6 +71,7 @@ contextBridge.exposeInMainWorld('electron', {
     deleteGroup:        (groupId)                               => ipcRenderer.invoke('playlists:deleteGroup', groupId),
     setTrackGroup:      (playlistId, trackId, groupId, position) => ipcRenderer.invoke('playlists:setTrackGroup', { playlistId, trackId, groupId, position }),
     getGroups:          (playlistId)                            => ipcRenderer.invoke('playlists:getGroups', playlistId),
+    isNameTaken:        (name, exceptId)                        => ipcRenderer.invoke('playlists:isNameTaken', { name, exceptId }),
   },
 
   // Spotify

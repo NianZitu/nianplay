@@ -119,7 +119,9 @@ export default function CommunityPage() {
       tracks: playlist.tracks || [],
     })
     setImporting(null)
-    if (res?.ok) showToast(`"${res.playlist.name}" adicionada à sua biblioteca`)
+    if (res?.ok) showToast(res.renamedFrom
+      ? `Adicionada como "${res.playlist.name}" (você já tem uma "${res.renamedFrom}")`
+      : `"${res.playlist.name}" adicionada à sua biblioteca`)
     else showToast(res?.error || 'Erro ao importar playlist', false)
   }
 

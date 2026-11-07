@@ -2,6 +2,7 @@ const { v4: uuidv4 } = require('uuid')
 const { getDB } = require('../db')
 const { norm, TrackIndex } = require('../trackMatch')
 const { canonicalUrl } = require('../mediaUrl')
+const { findByName, uniqueName, duplicateNameError, normalizePlaylistName } = require('../playlistNames')
 const path = require('path')
 const fs   = require('fs')
 
@@ -33,7 +34,8 @@ function importPlaylistData(data, fallbackName = 'Playlist Importada') {
   const allTracks = db.tracks.read()
   const playlist = {
     id:             uuidv4(),
-    name:           data.name || fallbackName,
+    // Imports never fail on a repeated name: they become "Name (2)"
+    name:           uniqueName(db.playlists.read(), data.name || fallbackName),
     cover_url:      data.cover_url || '',
     groups_enabled: Boolean(data.groups_enabled || (Array.isArray(data.groups) && data.groups.length > 0)),
     created_at:     Date.now(),
@@ -128,6 +130,7 @@ function importPlaylistData(data, fallbackName = 'Playlist Importada') {
   return {
     ok: true,
     playlist,
+    renamedFrom: normalizePlaylistName(playlist.name) !== normalizePlaylistName(data.name || fallbackName) ? (data.name || fallbackName) : null,
     trackCount: data.tracks.length,
     matched: data.tracks.length - created,
     created,
@@ -148,10 +151,14 @@ module.exports = function registerPlaylistHandlers(ipcMain) {
     })).sort((a, b) => b.created_at - a.created_at)
   })
 
+  // Names are unique per account (see playlistNames.js): create/rename/merge refuse a name in use
   ipcMain.handle('playlists:create', (_, { name, cover_url }) => {
     const db = getDB()
     const playlists = db.playlists.read()
-    const playlist = { id: uuidv4(), name, cover_url: cover_url || '', created_at: Date.now(), updated_at: Date.now() }
+    const clean = (name || '').trim().replace(/\s+/g, ' ')
+    if (!clean) return { error: 'Dê um nome para a playlist.' }
+    if (findByName(playlists, clean)) return { error: duplicateNameError(clean) }
+    const playlist = { id: uuidv4(), name: clean, cover_url: cover_url || '', created_at: Date.now(), updated_at: Date.now() }
     playlists.unshift(playlist)
     db.playlists.write(playlists)
     return playlist
@@ -162,9 +169,17 @@ module.exports = function registerPlaylistHandlers(ipcMain) {
     const playlists = db.playlists.read()
     const idx = playlists.findIndex(p => p.id === id)
     if (idx === -1) return false
-    playlists[idx] = { ...playlists[idx], name, cover_url, updated_at: Date.now() }
+    const clean = name === undefined ? playlists[idx].name : (name || '').trim().replace(/\s+/g, ' ')
+    if (!clean) return { error: 'Dê um nome para a playlist.' }
+    if (findByName(playlists, clean, id)) return { error: duplicateNameError(clean) }
+    playlists[idx] = { ...playlists[idx], name: clean, cover_url, updated_at: Date.now() }
     db.playlists.write(playlists)
     return playlists[idx]
+  })
+
+  // Lets the UI warn while the user types (no write)
+  ipcMain.handle('playlists:isNameTaken', (_, { name, exceptId }) => {
+    return Boolean(findByName(getDB().playlists.read(), name, exceptId || null))
   })
 
   ipcMain.handle('playlists:delete', (_, id) => {
@@ -315,7 +330,7 @@ module.exports = function registerPlaylistHandlers(ipcMain) {
     const newId = uuidv4()
     const newPlaylist = {
       id:             newId,
-      name:           `${playlist.name} (Cópia)`,
+      name:           uniqueName(db.playlists.read(), `${playlist.name} (Cópia)`),
       cover_url:      playlist.cover_url || '',
       groups_enabled: playlist.groups_enabled || false,
       created_at:     Date.now(),
@@ -360,6 +375,8 @@ module.exports = function registerPlaylistHandlers(ipcMain) {
   // Merge multiple playlists into a single new one (deduplicates by track_id)
   ipcMain.handle('playlists:merge', (_, { playlistIds, name, cover_url }) => {
     const db = getDB()
+    const mergedName = (name || '').trim().replace(/\s+/g, ' ') || uniqueName(db.playlists.read(), 'Playlist Unida')
+    if (findByName(db.playlists.read(), mergedName)) return { error: duplicateNameError(mergedName) }
     const allPt = db.playlistTracks.read()
 
     const seen = new Set()
@@ -380,7 +397,7 @@ module.exports = function registerPlaylistHandlers(ipcMain) {
 
     const newPlaylist = {
       id:             uuidv4(),
-      name:           name || 'Playlist Unida',
+      name:           mergedName,
       cover_url:      cover_url || '',
       groups_enabled: false,
       created_at:     Date.now(),
@@ -496,7 +513,7 @@ module.exports = function registerPlaylistHandlers(ipcMain) {
     // Create the playlist
     const playlist = {
       id:         uuidv4(),
-      name:       data.name || 'Playlist Importada',
+      name:       uniqueName(db.playlists.read(), data.name || 'Playlist Importada'),
       cover_url:  data.cover_url || '',
       created_at: Date.now(),
       updated_at: Date.now(),
@@ -634,6 +651,7 @@ module.exports = function registerPlaylistHandlers(ipcMain) {
     return {
       ok:          true,
       playlist,
+      renamedFrom: normalizePlaylistName(playlist.name) !== normalizePlaylistName(data.name || 'Playlist Importada') ? (data.name || 'Playlist Importada') : null,
       trackCount:  data.tracks.length,
       matched:     data.tracks.length - created,
       created,
