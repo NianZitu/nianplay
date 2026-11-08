@@ -17,6 +17,8 @@ o aviso de atualização mostrava as mudanças; faltava só o histórico embutid
 (`dist/assets`) e na tela "Atualizações" do navegador (v1.1.29, v1.1.28 com 6 itens, v1.1.27). As demais edições
 feitas por script na 1.1.28 foram auditadas e estão corretas.
 **Regra a partir daqui:** em scripts de edição, sempre falhar se o trecho procurado não existir e conferir o resultado.
+**Status:** ✅ publicada em 07/11/2026 — https://github.com/NianZitu/nianplay/releases/tag/v1.1.29 (commit 6882f1f;
+4 arquivos; `latest.yml` publicado idêntico ao local; marcada como latest).
 
 ---
 
