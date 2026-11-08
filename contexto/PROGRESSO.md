@@ -25,6 +25,15 @@ Node do bot; `YTDLP_JS_RUNTIME` no `.env` troca ou desliga com "none"). Testado 
 **Botões do "Tocando agora":** 6 botões numa linha → Discord recusava ("components[0].components: Must be between 1
 and 5"), quebrando `/nowplaying` e a mensagem com botões. `ui.controls()` agora devolve 2 linhas (⏮️ ⏯️ ⏭️ ⏹️ / 🔀 🔁);
 novo `test/ui.test.js` confere os limites. Testes 10/10.
+**Silêncio longo antes/entre músicas:** cada chamada ao yt-dlp leva ~4,5 s (medido no PC; mais na VPS) e o bot só
+preparava a próxima faixa depois que a anterior acabava (faixas sem link ainda fazem uma busca antes). Correções:
+- `GuildPlayer.prefetchNext()`: quando uma faixa começa, a próxima (respeitando loop faixa/fila) já busca o link e o
+  endereço do áudio em segundo plano; também depois de `/playnext`, `/shuffle`, `/move`, `/remove` e troca de loop.
+  `_ensurePlayable` compartilha a busca em andamento (`item._pending`), sem chamar o yt-dlp duas vezes.
+- `/play`: `ytdlp.info(..., { format })` devolve detalhes + endereço do áudio numa chamada só (`audioUrlOf`); antes eram
+  duas (info/busca + `-g`). Busca por nome: ~5,7 s; link: ~4,8 s, já com o áudio pronto.
+- ffmpeg medido: ~70 ms até o primeiro áudio — não é gargalo.
+Testes 13/13 (yt-dlp simulado nos testes do player).
 
 ---
 

@@ -48,6 +48,13 @@ class GuildPlayer {
     })
   }
 
+  // Changing the loop mode can change which track comes next
+  get loop() { return this._loop }
+  set loop(mode) {
+    this._loop = mode
+    if (this.queue) this.prefetchNext()
+  }
+
   get current() { return this.queue[this.index] || null }
   get upcoming() { return this.queue.slice(this.index + 1) }
   get isPlaying() { return this.player.state.status === AudioPlayerStatus.Playing }
@@ -111,6 +118,8 @@ class GuildPlayer {
     if (!this.isActive) {
       // Something current but stopped (e.g. after 3 failures): continue with the next track
       await this.playIndex(startAt)
+    } else {
+      this.prefetchNext()          // e.g. /playnext changed what comes next
     }
     return { added: toAdd.length, truncated }
   }
@@ -126,6 +135,7 @@ class GuildPlayer {
       await this._startStream(item, seek)
       this.failures = 0
       if (!seek) this.onEvent('nowPlaying', { item })
+      this.prefetchNext()
     } catch (err) {
       this.failures++
       console.warn(`[${this.guild.name}] Falha em "${item.title}":`, err.message)
@@ -144,18 +154,51 @@ class GuildPlayer {
     }
   }
 
-  // Search query → YouTube video; video → direct audio URL (both cached on the item)
-  async _ensurePlayable(item) {
+  // Search query → YouTube video; video → direct audio URL (both cached on the item).
+  // Each yt-dlp call takes seconds, so the next track is prepared while the current one plays
+  // (prefetchNext); a lookup already running for an item is shared instead of started again.
+  _isReady(item) {
+    return Boolean(item.streamUrl) && Date.now() - (item.streamUrlAt || 0) < STREAM_URL_TTL
+  }
+
+  _ensurePlayable(item) {
+    if (this._isReady(item)) return Promise.resolve()
+    if (!item._pending) {
+      item._pending = this._resolvePlayable(item).finally(() => { item._pending = null })
+    }
+    return item._pending
+  }
+
+  async _resolvePlayable(item) {
     if (!item.url) {
       const found = await findOnYoutube(item)
       item.url = found.url
       item.resolvedTitle = found.title
       if (!item.duration) item.duration = found.duration
     }
-    if (!item.streamUrl || Date.now() - item.streamUrlAt > STREAM_URL_TTL) {
+    if (!this._isReady(item)) {
       item.streamUrl = await ytdlp.streamUrl(item.url)
       item.streamUrlAt = Date.now()
     }
+  }
+
+  // Index of the track that plays after the current one (-1 = none), following the loop mode
+  _nextIndex() {
+    if (!this.current) return -1
+    if (this.loop === 'track') return this.index
+    if (this.index + 1 < this.queue.length) return this.index + 1
+    if (this.loop === 'queue' && this.queue.length) return 0
+    return -1
+  }
+
+  // Prepares the next track in the background. Errors are ignored here: the real attempt retries
+  // and reports them.
+  prefetchNext() {
+    const item = this.queue[this._nextIndex()]
+    if (!item || item === this.current || this._isReady(item) || item._pending) return
+    this._ensurePlayable(item).catch(err => {
+      console.warn(`[${this.guild.name}] Pré-carregamento de "${item.title}" falhou:`, err.message)
+    })
   }
 
   async _startStream(item, seek) {
@@ -255,6 +298,7 @@ class GuildPlayer {
       next = shuffleArray(upcoming)
     }
     this.queue = [...this.queue.slice(0, this.index + 1), ...next]
+    this.prefetchNext()
     return { mode, count: next.length }
   }
 
@@ -262,7 +306,9 @@ class GuildPlayer {
   remove(pos) {
     const i = this.index + pos
     if (pos < 1 || i >= this.queue.length) return null
-    return this.queue.splice(i, 1)[0]
+    const [it] = this.queue.splice(i, 1)
+    this.prefetchNext()
+    return it
   }
 
   move(from, to) {
@@ -270,6 +316,7 @@ class GuildPlayer {
     if (from < 1 || to < 1 || a >= this.queue.length || b >= this.queue.length) return null
     const [it] = this.queue.splice(a, 1)
     this.queue.splice(b, 0, it)
+    this.prefetchNext()
     return it
   }
 

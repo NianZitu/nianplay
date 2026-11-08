@@ -46,10 +46,21 @@ function friendlyError(stderr) {
   return line.replace(/^ERROR:\s*/, '').slice(0, 300)
 }
 
-// JSON of a video/playlist (flat = don't resolve every entry of a playlist)
-async function info(url, { flat = false } = {}) {
-  const args = ['-J', ...(flat ? ['--flat-playlist'] : ['--no-playlist']), url]
+// Audio format used for streaming (prefers opus/webm, the native format of Discord)
+const AUDIO_FORMAT = 'bestaudio[acodec=opus]/bestaudio/best'
+
+// JSON of a video/playlist (flat = don't resolve every entry of a playlist).
+// With `format`, the JSON also carries the direct URL of that format (see audioUrlOf), so a single
+// yt-dlp call gives both the details and the audio — each call costs several seconds.
+async function info(url, { flat = false, format = '' } = {}) {
+  const args = ['-J', ...(flat ? ['--flat-playlist'] : ['--no-playlist']), ...(format ? ['-f', format] : []), url]
   return JSON.parse(await run(args, { timeoutMs: flat ? 120000 : 60000 }))
+}
+
+// Direct audio URL inside an info() JSON fetched with `format` ('' when it is not a single file)
+function audioUrlOf(data) {
+  if (!data || data.requested_formats) return ''
+  return /^https?:\/\//.test(data.url || '') ? data.url : ''
 }
 
 // Up to `limit` search results: [{ id, url, title, duration, channel }]
@@ -64,12 +75,12 @@ async function search(query, limit = 5) {
   }))
 }
 
-// Direct audio URL for streaming (prefers opus/webm, the native format of Discord)
+// Direct audio URL for streaming
 async function streamUrl(videoUrl) {
-  const out = await run(['-f', 'bestaudio[acodec=opus]/bestaudio/best', '-g', '--no-playlist', videoUrl])
+  const out = await run(['-f', AUDIO_FORMAT, '-g', '--no-playlist', videoUrl])
   const url = out.trim().split('\n')[0]
   if (!/^https?:\/\//.test(url)) throw new Error('yt-dlp não retornou um endereço de áudio')
   return url
 }
 
-module.exports = { run, info, search, streamUrl }
+module.exports = { run, info, audioUrlOf, search, streamUrl, AUDIO_FORMAT }

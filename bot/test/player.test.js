@@ -1,6 +1,11 @@
 const test = require('node:test')
 const assert = require('node:assert')
+const ytdlp = require('../src/sources/ytdlp')
 const { GuildPlayer } = require('../src/player/GuildPlayer')
+
+// yt-dlp stub: counts calls, resolves after a short delay (the real one takes seconds)
+const calls = []
+ytdlp.streamUrl = async (url) => { calls.push(url); await new Promise(r => setTimeout(r, 20)); return `https://audio.test/${url.slice(-11)}` }
 
 // Player without Discord: playback is stubbed, only the queue logic is exercised
 function makePlayer() {
@@ -76,4 +81,39 @@ test('group shuffle: rest of the current group stays next, other groups stay who
       assert.deepStrictEqual(up.slice(at, at + g.length), g, `group ${g[0][0]} intact and in order`)
     }
   }
+})
+
+const tick = (ms = 60) => new Promise(r => setTimeout(r, ms))
+
+test('the next track is prepared in the background while the current one plays', async () => {
+  const p = makePlayer()
+  await p.enqueue([item('a'), item('b'), item('c')])
+  p.prefetchNext()                       // what playIndex does once a track starts
+  await tick()
+  assert.ok(p.queue[1].streamUrl, 'next track already has its audio URL')
+  assert.strictEqual(p.queue[2].streamUrl, undefined, 'only the next one, not the whole queue')
+})
+
+test('a lookup already running is shared (no second yt-dlp call for the same track)', async () => {
+  const p = makePlayer()
+  const it = item('shared')
+  calls.length = 0
+  await Promise.all([p._ensurePlayable(it), p._ensurePlayable(it), p._ensurePlayable(it)])
+  assert.strictEqual(calls.length, 1)
+  await p._ensurePlayable(it)            // ready now → no call
+  assert.strictEqual(calls.length, 1)
+})
+
+test('prefetch follows /playnext, shuffle and loop modes', async () => {
+  const p = makePlayer()
+  await p.enqueue([item('a'), item('b')])
+  await p.enqueue([item('n')], { next: true })
+  await tick()
+  assert.ok(p.queue[1].streamUrl, '/playnext item prepared')
+  p.index = 2                            // last track playing
+  assert.strictEqual(p._nextIndex(), -1)
+  p.loop = 'queue'
+  assert.strictEqual(p._nextIndex(), 0)
+  p.loop = 'track'
+  assert.strictEqual(p._nextIndex(), 2)
 })

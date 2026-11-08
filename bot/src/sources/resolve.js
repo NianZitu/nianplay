@@ -14,6 +14,13 @@ const videoItem = (e, source = 'youtube') => ({
   source,
 })
 
+// Keeps the audio URL that came with the info JSON, so playback doesn't need another yt-dlp call
+function withStream(item, data) {
+  const streamUrl = ytdlp.audioUrlOf(data)
+  return streamUrl ? { ...item, streamUrl, streamUrlAt: Date.now() } : item
+}
+const AUDIO = { format: ytdlp.AUDIO_FORMAT }
+
 // Returns { title, items } — title is the playlist/album name when there is one
 async function resolveInput(input) {
   const text = (input || '').trim()
@@ -33,21 +40,22 @@ async function resolveInput(input) {
       return { title: data.title || 'Playlist do YouTube', items }
     }
     if (videoId) {
-      const data = await ytdlp.info(canonicalUrl(text))
-      return { title: '', items: [videoItem(data)] }
+      const data = await ytdlp.info(canonicalUrl(text), AUDIO)
+      return { title: '', items: [withStream(videoItem(data), data)] }
     }
   }
 
   if (/^https?:\/\//i.test(text)) {
     // Any other site yt-dlp supports (SoundCloud, Bandcamp, ...)
-    const data = await ytdlp.info(text)
-    return { title: '', items: [{ ...videoItem(data, 'link'), url: data.webpage_url || text }] }
+    const data = await ytdlp.info(text, AUDIO)
+    return { title: '', items: [withStream({ ...videoItem(data, 'link'), url: data.webpage_url || text }, data)] }
   }
 
-  // Plain text → first YouTube result
-  const [first] = await ytdlp.search(text, 1)
+  // Plain text → first YouTube result (search + audio URL in one call)
+  const data = await ytdlp.info(`ytsearch1:${text}`, AUDIO)
+  const first = (data.entries || []).find(e => e && e.id)
   if (!first) throw new Error(`Nada encontrado no YouTube para "${text}".`)
-  return { title: '', items: [{ ...videoItem({ ...first, webpage_url: first.url, uploader: first.channel }), source: 'search' }] }
+  return { title: '', items: [withStream({ ...videoItem(first), source: 'search' }, first)] }
 }
 
 // ── Lazy lookup: "artist - title" → best YouTube video (same scoring as the NianPlay app) ──
