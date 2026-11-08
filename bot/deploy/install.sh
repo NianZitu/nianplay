@@ -48,7 +48,7 @@ fi
 chown -R "$BOT_USER:$BOT_USER" "$APP_DIR"
 
 echo "==> Dependências do bot"
-sudo -u "$BOT_USER" bash -c "cd '$BOT_DIR' && npm ci --omit=dev --no-audit --no-fund"
+sudo -u "$BOT_USER" bash -c "cd '$BOT_DIR' && { npm ci --omit=dev --no-audit --no-fund || npm install --omit=dev --no-audit --no-fund; }"
 
 if [ ! -f "$BOT_DIR/.env" ]; then
   cp "$BOT_DIR/.env.example" "$BOT_DIR/.env"

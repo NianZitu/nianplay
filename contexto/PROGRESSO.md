@@ -6,6 +6,17 @@ Cada entrada: versão, data, o que mudou, por quê, arquivos e status.
 
 ---
 
+## Bot — 08/11/2026 — Instalação na VPS falhava no `npm ci`
+
+**Problema:** na VPS (Ubuntu 24.04, npm 10.9) o `install.sh` parava em `npm ci`: "Missing: opusscript@0.0.8 from lock
+file". O lock foi gerado com npm 11, que aceita `opusscript@0.1.1` mesmo com o `prism-media` pedindo `^0.0.8` (peer
+opcional); o npm 10 recusa. Com `set -e`, o script parava antes de criar o serviço (`nianplay-bot.service not found`).
+**Correção:** `opusscript` fixado em `^0.0.8` (a versão que o `prism-media` suporta) e lock regenerado; testado com
+`npx npm@10.9.9 ci` (ok, `generateDependencyReport` mostra `@discordjs/opus` e `opusscript`). `install.sh` e `update.sh`
+usam `npm install` se o `npm ci` falhar. Testes: 8/8.
+
+---
+
 ## 1.1.29 — 07/11/2026 — Entrada da 1.1.28 no histórico do app
 
 **Problema (relatado pelo usuário):** a tela "Histórico de atualizações" da 1.1.28 não mostrava a 1.1.28.
