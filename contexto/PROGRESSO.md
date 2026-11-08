@@ -14,6 +14,8 @@ opcional); o npm 10 recusa. Com `set -e`, o script parava antes de criar o servi
 **Correção:** `opusscript` fixado em `^0.0.8` (a versão que o `prism-media` suporta) e lock regenerado; testado com
 `npx npm@10.9.9 ci` (ok, `generateDependencyReport` mostra `@discordjs/opus` e `opusscript`). `install.sh` e `update.sh`
 usam `npm install` se o `npm ci` falhar. Testes: 8/8.
+**Segunda falha (reinstalação):** `git fetch` como root em `/opt/nianplay` (dono `nianplay`) → "detected dubious
+ownership". Os comandos git dos dois scripts agora usam `git -c safe.directory="$APP_DIR"` (commit cd5ad1e).
 
 ---
 
