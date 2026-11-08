@@ -16,6 +16,12 @@ opcional); o npm 10 recusa. Com `set -e`, o script parava antes de criar o servi
 usam `npm install` se o `npm ci` falhar. Testes: 8/8.
 **Segunda falha (reinstalação):** `git fetch` como root em `/opt/nianplay` (dono `nianplay`) → "detected dubious
 ownership". Os comandos git dos dois scripts agora usam `git -c safe.directory="$APP_DIR"` (commit cd5ad1e).
+**Resultado:** bot online na VPS (NianPlay#3432, 22 comandos no servidor).
+**YouTube na VPS:** primeiro "confirme que não é robô" → resolvido com `YTDLP_COOKIES`. Depois "Requested format is
+not available": o yt-dlp 2026 precisa de um interpretador JavaScript para os desafios do YouTube ("JS runtimes: none";
+com cookies ele usa clientes web que exigem isso). O bot agora passa `--js-runtimes node:<process.execPath>` (o próprio
+Node do bot; `YTDLP_JS_RUNTIME` no `.env` troca ou desliga com "none"). Testado localmente: `JS runtimes: node-24`,
+`streamUrl` ok; testes 8/8. Mensagem amigável para "Requested format is not available".
 
 ---
 

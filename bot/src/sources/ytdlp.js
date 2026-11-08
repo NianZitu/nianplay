@@ -6,6 +6,8 @@ const config = require('../config')
 function baseArgs() {
   const args = ['--no-warnings', '--no-progress', '--encoding', 'utf-8']
   if (config.ytdlpCookies) args.push('--cookies', config.ytdlpCookies)
+  const js = config.ytdlpJsRuntime
+  if (js && js !== 'none' && !config.ytdlpExtraArgs.includes('--js-runtimes')) args.push('--js-runtimes', js)
   return [...args, ...config.ytdlpExtraArgs]
 }
 
@@ -38,6 +40,9 @@ function friendlyError(stderr) {
   }
   if (/private video|video unavailable|this video is unavailable/i.test(line)) return 'Vídeo indisponível ou privado.'
   if (/age/i.test(line) && /restrict|confirm your age/i.test(line)) return 'Vídeo com restrição de idade (precisa de cookies).'
+  if (/requested format is not available/i.test(line)) {
+    return 'O YouTube não liberou o áudio deste vídeo. Atualize o bot (deploy/update.sh); se continuar, exporte os cookies de novo.'
+  }
   return line.replace(/^ERROR:\s*/, '').slice(0, 300)
 }
 

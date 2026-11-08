@@ -20,6 +20,9 @@ module.exports = {
   // YouTube often blocks datacenter IPs ("Sign in to confirm you're not a bot").
   // A cookies.txt exported from a YouTube account usually fixes it (see README).
   ytdlpCookies: env('YTDLP_COOKIES'),
+  // yt-dlp needs a JavaScript runtime to solve YouTube's challenges (without it the audio formats disappear,
+  // "Requested format is not available"). Default: the same Node.js that runs the bot. "none" disables it.
+  ytdlpJsRuntime: env('YTDLP_JS_RUNTIME') || `node:${process.execPath}`,
   ytdlpExtraArgs: env('YTDLP_EXTRA_ARGS').split(/\s+/).filter(Boolean),
 
   // Spotify (optional): without them, playlists/albums are read from the public embed
