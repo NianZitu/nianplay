@@ -42,16 +42,20 @@ function nowPlayingEmbed(player, { withProgress = false } = {}) {
   return embed
 }
 
-function controlsRow(player) {
-  return new ActionRowBuilder().addComponents(
+// Discord allows at most 5 buttons per row: playback on the first row, modes on the second
+function controls(player) {
+  const playback = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('np:previous').setEmoji('⏮️').setStyle(ButtonStyle.Secondary).setDisabled(player.index <= 0),
     new ButtonBuilder().setCustomId('np:toggle').setEmoji(player.isPaused ? '▶️' : '⏸️').setStyle(ButtonStyle.Primary),
     new ButtonBuilder().setCustomId('np:skip').setEmoji('⏭️').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('np:stop').setEmoji('⏹️').setStyle(ButtonStyle.Danger),
+  )
+  const modes = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('np:shuffle').setEmoji('🔀').setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId('np:loop').setEmoji(player.loop === 'track' ? '🔂' : '🔁')
       .setStyle(player.loop === 'off' ? ButtonStyle.Secondary : ButtonStyle.Success),
-    new ButtonBuilder().setCustomId('np:stop').setEmoji('⏹️').setStyle(ButtonStyle.Danger),
-  ).toJSON()
+  )
+  return [playback.toJSON(), modes.toJSON()]
 }
 
 const PAGE = 10
@@ -86,4 +90,4 @@ function queuePager(page, pages) {
 const info = (text) => new EmbedBuilder().setColor(BRAND).setDescription(text)
 const error = (text) => new EmbedBuilder().setColor(0xdc2626).setDescription(`❌ ${text}`)
 
-module.exports = { nowPlayingEmbed, controlsRow, queueEmbed, queuePager, info, error, PAGE, durationOf, LOOP_LABEL, BRAND }
+module.exports = { nowPlayingEmbed, controls, queueEmbed, queuePager, info, error, PAGE, durationOf, LOOP_LABEL, BRAND }

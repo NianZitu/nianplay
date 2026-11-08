@@ -35,7 +35,7 @@ function createPlayer(guild) {
     onEvent: async (type, data) => {
       switch (type) {
         case 'nowPlaying': {
-          const msg = await sendToGuild(player, { embeds: [ui.nowPlayingEmbed(player)], components: [ui.controlsRow(player)] })
+          const msg = await sendToGuild(player, { embeds: [ui.nowPlayingEmbed(player)], components: ui.controls(player) })
           await replaceNowPlaying(guild.id, msg)
           break
         }
@@ -103,7 +103,7 @@ async function handleButton(interaction) {
     case 'loop': player.loop = player.loop === 'off' ? 'queue' : player.loop === 'queue' ? 'track' : 'off'; break
     case 'stop': player.stop(); await replaceNowPlaying(interaction.guildId, null); return interaction.reply({ embeds: [ui.info('⏹️ Música parada e fila limpa.')] })
   }
-  if (player.current) await interaction.update({ embeds: [ui.nowPlayingEmbed(player)], components: [ui.controlsRow(player)] })
+  if (player.current) await interaction.update({ embeds: [ui.nowPlayingEmbed(player)], components: ui.controls(player) })
   else await interaction.deferUpdate()
 }
 

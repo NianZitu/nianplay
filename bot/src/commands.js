@@ -216,7 +216,7 @@ const handlers = {
 
   async nowplaying(interaction, players) {
     const player = players.get(interaction.guild); requireCurrent(player)
-    await interaction.reply({ embeds: [ui.nowPlayingEmbed(player, { withProgress: true })], components: [ui.controlsRow(player)] })
+    await interaction.reply({ embeds: [ui.nowPlayingEmbed(player, { withProgress: true })], components: ui.controls(player) })
   },
 
   async shuffle(interaction, players) {

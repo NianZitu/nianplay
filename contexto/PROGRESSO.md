@@ -22,6 +22,9 @@ not available": o yt-dlp 2026 precisa de um interpretador JavaScript para os des
 com cookies ele usa clientes web que exigem isso). O bot agora passa `--js-runtimes node:<process.execPath>` (o próprio
 Node do bot; `YTDLP_JS_RUNTIME` no `.env` troca ou desliga com "none"). Testado localmente: `JS runtimes: node-24`,
 `streamUrl` ok; testes 8/8. Mensagem amigável para "Requested format is not available".
+**Botões do "Tocando agora":** 6 botões numa linha → Discord recusava ("components[0].components: Must be between 1
+and 5"), quebrando `/nowplaying` e a mensagem com botões. `ui.controls()` agora devolve 2 linhas (⏮️ ⏯️ ⏭️ ⏹️ / 🔀 🔁);
+novo `test/ui.test.js` confere os limites. Testes 10/10.
 
 ---
 
