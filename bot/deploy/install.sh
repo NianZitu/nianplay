@@ -39,11 +39,11 @@ id "$BOT_USER" >/dev/null 2>&1 || useradd --system --create-home --home-dir "/ho
 
 echo "==> Código do bot em $APP_DIR"
 if [ -d "$APP_DIR/.git" ]; then
-  git -C "$APP_DIR" fetch --depth 1 origin main
-  git -C "$APP_DIR" reset --hard origin/main
+  git -c safe.directory="$APP_DIR" -C "$APP_DIR" fetch --depth 1 origin main
+  git -c safe.directory="$APP_DIR" -C "$APP_DIR" reset --hard origin/main
 else
   git clone --depth 1 --filter=blob:none --sparse "$REPO_URL" "$APP_DIR"
-  git -C "$APP_DIR" sparse-checkout set bot
+  git -c safe.directory="$APP_DIR" -C "$APP_DIR" sparse-checkout set bot
 fi
 chown -R "$BOT_USER:$BOT_USER" "$APP_DIR"
 
