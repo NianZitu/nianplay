@@ -1,5 +1,26 @@
 export const UPDATE_LOGS = [
   {
+    version: '1.1.29',
+    title: 'Historico de atualizacoes completo',
+    date: '07/11/2026',
+    changes: [
+      'Corrige a tela de atualizacoes, que nao mostrava as mudancas da versao 1.1.28.',
+    ],
+  },
+  {
+    version: '1.1.28',
+    title: 'Playlists sem duplicatas na nuvem e link para o bot',
+    date: '07/11/2026',
+    changes: [
+      'Corrige playlists duplicadas na nuvem: uma playlist com o mesmo nome agora substitui a versao anterior ao enviar.',
+      'Ao enviar para a nuvem, as copias antigas das suas playlists sao removidas da Comunidade.',
+      'Nao e mais possivel ter duas playlists com o mesmo nome na conta (maiusculas e espacos extras nao contam como diferenca).',
+      'Duplicar e importar playlists com um nome que ja existe cria automaticamente "Nome (2)".',
+      'Playlists com nomes repetidos que ja existiam sao renomeadas uma vez ao abrir o app.',
+      'Novo botao Copiar link do bot na playlist, para tocar no Discord com /nianplay e /group.',
+    ],
+  },
+  {
     version: '1.1.27',
     title: 'Link personalizado na verificacao de links',
     date: '22/10/2026',

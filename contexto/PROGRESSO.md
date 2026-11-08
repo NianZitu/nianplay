@@ -6,6 +6,20 @@ Cada entrada: versão, data, o que mudou, por quê, arquivos e status.
 
 ---
 
+## 1.1.29 — 07/11/2026 — Entrada da 1.1.28 no histórico do app
+
+**Problema (relatado pelo usuário):** a tela "Histórico de atualizações" da 1.1.28 não mostrava a 1.1.28.
+**Causa:** o script que inseriu a entrada em `src/renderer/data/updateLogs.js` procurava o texto com `\n`, mas a cópia
+de trabalho do repositório usa **CRLF** (`\r\n`) → `String.replace` não achou nada e não avisou; a entrada nunca foi
+gravada e o resultado não foi conferido. As notas da release no GitHub (`release-notes/1.1.28.md`) estavam corretas —
+o aviso de atualização mostrava as mudanças; faltava só o histórico embutido no app.
+**Correção:** entradas 1.1.28 e 1.1.29 inseridas com a ferramenta de edição (mantém CRLF); conferido no arquivo, no bundle
+(`dist/assets`) e na tela "Atualizações" do navegador (v1.1.29, v1.1.28 com 6 itens, v1.1.27). As demais edições
+feitas por script na 1.1.28 foram auditadas e estão corretas.
+**Regra a partir daqui:** em scripts de edição, sempre falhar se o trecho procurado não existir e conferir o resultado.
+
+---
+
 ## 1.1.28 — 07/11/2026 — Playlists sem duplicatas na nuvem + nomes únicos + link do bot
 
 **Pedido do usuário:** a nuvem estava duplicando playlists; playlists de mesmo nome do mesmo usuário devem se
