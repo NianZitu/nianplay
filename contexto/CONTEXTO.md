@@ -159,6 +159,50 @@ Projeto Node separado (CommonJS, Node ≥ 22.12) para rodar numa VPS (Hostinger,
   (cookies.txt de conta secundária). Mensagem amigável já tratada em `ytdlp.js`.
 - Testes: `cd bot && npm test` (grupos vs app, fila do player).
 
+## App para iPhone (`mobile/`, branch `mobile`)
+
+App iOS com **Capacitor 8** (WKWebView + SPM), instalado por **sideload com AltStore** (.ipa sem assinatura — o
+AltStore assina com o Apple ID do usuário; com Apple ID gratuito o app expira em 7 dias e o AltStore renova).
+Interface **no estilo do Spotify mobile** (pedido do usuário), com as cores e blocos do NianPlay.
+
+- **Build:** não dá para compilar iOS no Windows. `.github/workflows/ios.yml` roda num Mac do GitHub Actions
+  (grátis, repo público): `vite build --config mobile/vite.config.js` → `npx cap add ios` → `mobile/ci/patch-ios.sh`
+  (nome, `UIBackgroundModes=audio`, `UIFileSharingEnabled`, só retrato, ícone/splash de `mobile/resources`,
+  `AVAudioSession .playback` no AppDelegate) → `cap sync` → `xcodebuild archive` sem assinatura → `Payload/App.app`
+  zipado como `NianPlay-<versão>.ipa` (artefato `NianPlay-ipa`). Dispara em push no branch `mobile` ou manualmente.
+  Baixar: `gh run download <id> --repo NianZitu/nianplay -n NianPlay-ipa`.
+- **Dev local:** `npx vite --config mobile/vite.config.js` (porta 5174; config `nianplay-mobile` no launch.json) —
+  roda no navegador com o Filesystem web do Capacitor (IndexedDB); arquivos importados tocam via blob só na sessão.
+- **Reaproveita** `src/renderer`: `store/PlayerContext.jsx` (player, ganho, cortes, grupos), `contexts/AuthContext.jsx`
+  (login e "Baixar da nuvem"), `utils/*`, `components/VirtualRows.jsx`, `globals.css` e o tema do Tailwind. Ganchos
+  no código compartilhado (sem efeito no desktop): `window.nianplayPlatform.mediaUrl` (covers.js) e
+  `window.nianplayPlatform.webAudio === false` desliga o Web Audio (PlayerContext.connectAudioGraph).
+- **`mobile/src/platform/`** — implementa `window.electron` no celular: `storage.js` (tabelas JSON em
+  `Library/nianplay/`, mesmo modelo do db.js, flush ao ir para segundo plano), `api.js` (library/playlists/settings/
+  player/lyrics com o mesmo comportamento dos handlers do desktop), `rules.js` (nomes únicos de playlist e
+  findTrackMatch — cópias fiéis), `paths.js`, `id3.js` (leitor ID3v2 próprio — testado igual ao music-metadata nos
+  302 MP3 do usuário, capas byte a byte), `media.js` (importação).
+- **Caminhos guardados são relativos** (o iOS muda a pasta do app a cada atualização): `nian-lib://music/…`
+  (cópias importadas, `Library/NoCloud`), `nian-lib://covers/…` (capa 600 px + miniatura 120 px) e
+  `nian-docs://…` (arquivos na pasta Documentos, visível em Arquivos › No meu iPhone › NianPlay e no Dispositivos
+  Apple/iTunes do PC; lida no lugar). `paths.mediaUrl` → `Capacitor.convertFileSrc` (mesma origem, Range).
+- **Música no celular:** importar do app Arquivos (copia em blocos de 3 MB) ou escanear Documentos (automático ao
+  abrir/voltar ao app). Cada arquivo é **ligado à faixa da nuvem sem arquivo** se título+artista baterem
+  (findTrackMatch); arquivo **sem tag de artista** liga por título só se for o único título igual na biblioteca e a
+  duração bater (±3 s). Duplicatas não são copiadas; duplicatas em Documentos ficam em `settings.ignoredDocs`.
+- **Nuvem: só "Baixar da nuvem".** O "Enviar para nuvem" do desktop APAGA e regrava tudo — de um celular com parte
+  das músicas destruiria as playlists do PC. Login só por e-mail/senha (popup do Google não funciona no WKWebView).
+- **Fora do mobile (exigem Node/binários):** downloads (yt-dlp), medição LUFS (os ganhos vêm da nuvem), Spotify,
+  export para o YouTube, comunidade, edição de grupos (a ordem dos grupos é respeitada ao tocar).
+- **Interface (`mobile/src/ui/`):** abas Início / Buscar / Sua Biblioteca (pilha de páginas por aba; tocar na aba
+  ativa volta ao início); conta pelo avatar (`screens/Account.jsx`); `screens/Collection.jsx` = playlist, "Todas as
+  músicas" e artista (degradê da cor da capa, play redondo, aleatório, cabeçalho que encolhe); `MiniPlayer.jsx`
+  (flutuante, deslizar troca de música); `NowPlaying.jsx` (fila, letra, puxar para baixo fecha); `tracks.jsx`
+  (linha + menu por "⋯"/toque longo); `playContext.js` ("Tocando da playlist…" e "Tocadas recentemente").
+  Controles da tela de bloqueio via Media Session (App.jsx).
+- **Ícones:** o projeto usa `lucide-react` 0.344 — nomes antigos (`DownloadCloud`, não `CloudDownload`).
+- **Tailwind do mobile:** `content` com caminhos absolutos (o Tailwind resolve a partir da pasta de execução).
+
 ## Problemas conhecidos / próximos passos
 
 Fases 1–3 de otimização concluídas (ver `PROGRESSO.md`, versões 1.1.22, 1.1.23 e 1.1.24).

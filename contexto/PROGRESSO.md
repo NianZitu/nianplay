@@ -6,6 +6,36 @@ Cada entrada: versão, data, o que mudou, por quê, arquivos e status.
 
 ---
 
+## iPhone 0.1.0 — 11/11/2026 — Primeira versão mobile (.ipa para AltStore)
+
+**Pedido do usuário:** portar o NianPlay para o iPhone (ele instalou o AltStore) e gerar um `.ipa`. Durante o
+trabalho, pediu que a interface funcionasse **como a do Spotify mobile**, mantendo as cores e blocos do NianPlay.
+
+### Decisões
+- **Capacitor 8** reaproveitando o React do desktop; build do iOS no **GitHub Actions (macOS)** porque não existe
+  Xcode no Windows; `.ipa` **sem assinatura** (o AltStore assina). Tudo no branch **`mobile`** — `main` e as releases
+  do desktop não foram tocados.
+- Mantido do desktop: player (ganho LUFS, cortes, grupos de sequência), login e "Baixar da nuvem", regras de nomes
+  de playlist e de casamento de faixas. Fora: yt-dlp, medição LUFS, Spotify, export YouTube, comunidade,
+  "Enviar para nuvem" (substituiria a nuvem com a biblioteca parcial do celular), login Google.
+- Detalhes da arquitetura em `CONTEXTO.md` → "App para iPhone".
+
+### Testes
+- `id3.js` × music-metadata nos **302 MP3 reais** do usuário (só leitura): título, artista, álbum e capa idênticos em
+  300/300 capas; ID3 v2.3 e v2.4 ✅
+- Navegador (375×812, dados simulados + arquivos WAV reais pelo fluxo de importação): Início, Buscar, Sua Biblioteca,
+  playlist com grupo, "Todas as músicas", conta; importação liga "Fresh" (título+artista) e "Pico" (sem tag de artista,
+  título único) às faixas da nuvem mantendo id e ganho (−2,5 dB); reimportar = duplicata; tocar pela playlist respeita
+  os grupos e pula faixas sem arquivo; mini player, "Tocando agora" com tempo avançando e "Volume equalizado
+  −2,5 dB"; menu ⋯ → Adicionar à playlist; tocar na aba ativa volta ao início; nome de playlist duplicado recusado;
+  sem erros no console ✅
+- Desktop continua compilando com os 2 ajustes compartilhados (covers.js, PlayerContext.jsx) ✅
+- **Não testado (sem iPhone/Mac aqui):** execução no aparelho, áudio em segundo plano/tela bloqueada com o Web Audio
+  ligado, controles da tela de bloqueio, Firebase no WKWebView, escaneamento da pasta Documentos e cópia de arquivos
+  grandes. Ajuste "Equalização de volume (LUFS)" pode ser desligado se a música parar ao bloquear a tela.
+
+---
+
 ## Bot — 08/11/2026 — Instalação na VPS falhava no `npm ci`
 
 **Problema:** na VPS (Ubuntu 24.04, npm 10.9) o `install.sh` parava em `npm ci`: "Missing: opusscript@0.0.8 from lock
