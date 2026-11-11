@@ -415,12 +415,22 @@ export function AuthProvider({ children }) {
         const plName = normalizePlaylistName(pl.name)
 
         let localPl = (localPlaylists || []).find(p => normalizePlaylistName(p.name) === plName)
+        let created = false
         if (!localPl) {
           // Create playlist
           localPl = await window.electron.playlists.create({ name: pl.name, cover_url: pl.cover_url })
+          created = true
         }
 
         if (!localPl?.id) continue
+
+        // "Grupos de sequência" on/off comes from the cloud too (it used to stay off after a
+        // download). On a computer only for playlists created here, so a local choice isn't
+        // overridden; the iPhone app just mirrors the cloud.
+        if ((created || window.nianplayPlatform?.mobile) && Boolean(pl.groups_enabled) !== Boolean(localPl.groups_enabled)) {
+          const toggled = await window.electron.playlists.toggleGroups(localPl.id)
+          if (toggled) localPl = { ...localPl, groups_enabled: toggled.groups_enabled }
+        }
 
         // Fetch playlist tracks from cloud and add missing ones
         const ptSnap        = await getDocs(collection(db, 'users', user.uid, 'playlists', plDoc.id, 'tracks'))

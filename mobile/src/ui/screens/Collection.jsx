@@ -1,6 +1,6 @@
 // Spotify-style collection page: a playlist, "Todas as músicas" or an artist.
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronLeft, Play, Pause, Shuffle, MoreHorizontal, PlusCircle, Search, X, Heart, Download, FolderSearch, Eye, EyeOff, HelpCircle, Pencil, Trash2, Plus, Check } from 'lucide-react'
+import { ChevronLeft, Play, Pause, Shuffle, MoreHorizontal, PlusCircle, Search, X, Heart, Download, FolderSearch, Eye, EyeOff, HelpCircle, Pencil, Trash2, Plus, Check, Folder, FolderOpen, ChevronDown, Layers, Tag } from 'lucide-react'
 import { usePlayer } from '../../../../src/renderer/store/PlayerContext'
 import VirtualRows from '../../../../src/renderer/components/VirtualRows'
 import { useLibrary, isPlayable, formatTime, Sheet, Cover } from '../common'
@@ -62,6 +62,41 @@ export default function Collection({ page }) {
     if (q) list = list.filter(t => `${t.title} ${t.artist} ${t.album}`.toLowerCase().includes(q))
     return list
   }, [ordered, showMissing, query])
+
+  // Groups view (folders closed by default, like the desktop)
+  const [openGroups, setOpenGroups] = useState(() => new Set())
+  const toggleGroup = id => setOpenGroups(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
+
+  const rows = useMemo(() => {
+    if (!groupsOn || query.trim()) return visible.map(t => ({ kind: 'track', key: t.id, track: t }))
+    const pool = showMissing ? baseTracks : baseTracks.filter(isPlayable)
+    const byGroup = new Map(groups.map(g => [g.id, []]))
+    const loose = []
+    for (const t of pool) (t.group_id && byGroup.has(t.group_id) ? byGroup.get(t.group_id) : loose).push(t)
+    const out = []
+    for (const g of groups) {
+      const list = byGroup.get(g.id).sort((a, b) => (a.group_position ?? 0) - (b.group_position ?? 0))
+      if (!list.length) continue
+      out.push({ kind: 'group', key: `g-${g.id}`, group: g, tracks: list })
+      if (openGroups.has(g.id)) list.forEach(t => out.push({ kind: 'track', key: t.id, track: t }))
+    }
+    if (loose.length) {
+      if (out.length) out.push({ kind: 'label', key: 'loose', text: 'Faixas avulsas' })
+      loose.forEach(t => out.push({ kind: 'track', key: t.id, track: t }))
+    }
+    return out
+  }, [groupsOn, query, visible, showMissing, baseTracks, groups, openGroups])
+
+  // Same as the desktop's handlePlayGroup: the whole playlist in group order, from this group's first song
+  function playGroup(group) {
+    const q = buildGroupedQueue(baseTracks, groups, false).filter(isPlayable)
+    const first = q.find(t => t.group_id === group.id)
+    if (!first) { shell.toast('Nenhuma música deste grupo está neste iPhone.', false); return }
+    player.setGroupsEnabled(true)
+    player.setShuffle(false)
+    player.playTrack(first, q)
+    setPlayContext(context)
+  }
 
   const context = page.type === 'playlist'
     ? { type: 'playlist', id: page.id, name: playlist?.name || 'Playlist' }
@@ -208,28 +243,61 @@ export default function Collection({ page }) {
           </div>
         </div>
 
-        {/* Tracks */}
-        {visible.length === 0 ? (
+        {/* Tracks — with groups on: one folder row per group (tap = open/close, ▶ = play the group),
+            then "Faixas avulsas". Every row has the same height so the list stays virtualized. */}
+        {rows.length === 0 ? (
           <EmptyState page={page} hasQuery={!!query} onAdd={() => setAddOpen(true)} />
         ) : (
-          <VirtualRows items={visible} rowHeight={ROW_HEIGHT} scrollRef={scrollRef}
-            renderRow={t => (
-              <TrackRow key={t.id} track={t} onPlay={onPlayRow} onMenu={setMenuTrack}
-                groupColor={groupsOn ? groupColor[t.group_id] : null} />
+          <VirtualRows items={rows} rowHeight={ROW_HEIGHT} scrollRef={scrollRef}
+            renderRow={row => row.kind === 'group' ? (
+              <GroupRow key={row.key} group={row.group} tracks={row.tracks} open={openGroups.has(row.group.id)}
+                onToggle={() => toggleGroup(row.group.id)} onPlay={() => playGroup(row.group)} />
+            ) : row.kind === 'label' ? (
+              <div key={row.key} style={{ height: ROW_HEIGHT }} className="flex items-end px-4 pb-2">
+                <p className="text-[13px] font-bold text-white/60 uppercase tracking-wider">{row.text}</p>
+              </div>
+            ) : (
+              <TrackRow key={row.key} track={row.track} onPlay={onPlayRow} onMenu={setMenuTrack}
+                groupColor={groupsOn ? groupColor[row.track.group_id] : null} />
             )} />
         )}
         <div style={{ height: 'calc(env(safe-area-inset-bottom) + 150px)' }} />
       </div>
 
       {menuTrack && (
-        <TrackMenu track={menuTrack} context={page.type === 'playlist' ? { playlistId: page.id } : {}}
+        <TrackMenu track={menuTrack}
+          context={page.type === 'playlist' ? { playlistId: page.id, groups, playlistTracks: plTracks } : {}}
           onClose={() => setMenuTrack(null)} onChanged={() => { reloadPlaylist(); reloadLibrary() }} />
       )}
-      {moreOpen && <MoreMenu page={page} playlist={playlist} onClose={() => setMoreOpen(false)} onAdd={() => setAddOpen(true)} />}
+      {moreOpen && <MoreMenu page={page} playlist={playlist} groups={groups} onClose={() => setMoreOpen(false)}
+        onAdd={() => setAddOpen(true)} onGroupsChanged={() => { reloadPlaylist(); notifyLibraryChanged() }} />}
       {addOpen && page.type === 'playlist' && (
         <AddTracksSheet playlistId={page.id} inPlaylist={plTracks} library={library}
           onClose={() => { setAddOpen(false); reloadPlaylist() }} />
       )}
+    </div>
+  )
+}
+
+// A "grupo de sequência" folder in the playlist list
+function GroupRow({ group, tracks, open, onToggle, onPlay }) {
+  const here = tracks.filter(isPlayable).length
+  return (
+    <div style={{ height: ROW_HEIGHT }} className="flex items-center gap-3 pl-4 pr-2 active:bg-white/5" onClick={onToggle}>
+      <div className="w-12 h-12 rounded flex items-center justify-center shrink-0" style={{ backgroundColor: group.color }}>
+        {open ? <FolderOpen size={22} className="text-white" /> : <Folder size={22} className="text-white" />}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-[15px] font-semibold truncate" style={{ color: group.color }}>{group.name}</p>
+        <p className="text-[13px] text-white/50 truncate">
+          Grupo · {tracks.length} música{tracks.length !== 1 ? 's' : ''}{here < tracks.length ? ` · ${here} no iPhone` : ''}
+        </p>
+      </div>
+      <ChevronDown size={20} className={`text-white/40 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+      <button onClick={e => { e.stopPropagation(); onPlay() }} aria-label={`Tocar o grupo ${group.name}`}
+        className="w-10 h-10 rounded-full border border-white/25 flex items-center justify-center text-white shrink-0 active:scale-90 transition-transform">
+        <Play size={16} fill="currentColor" className="ml-0.5" />
+      </button>
     </div>
   )
 }
@@ -263,9 +331,30 @@ function EmptyState({ page, hasQuery, onAdd }) {
   )
 }
 
-function MoreMenu({ page, playlist, onClose, onAdd }) {
+function MoreMenu({ page, playlist, groups = [], onClose, onAdd, onGroupsChanged }) {
   const shell = useShell()
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deletingGroup, setDeletingGroup] = useState(false)
+  if (deletingGroup) {
+    return (
+      <Sheet title="Excluir um grupo" onClose={onClose}>
+        <p className="px-5 pb-2 text-[13px] text-white/50 leading-relaxed">As músicas continuam na playlist, sem grupo.</p>
+        <div className="pb-2">
+          {groups.map(g => (
+            <button key={g.id} className="w-full flex items-center gap-3 px-5 py-3 text-left active:bg-white/5"
+              onClick={async () => {
+                await window.electron.playlists.deleteGroup(g.id)
+                onGroupsChanged?.(); onClose(); shell.toast(`Grupo ${g.name} excluído`)
+              }}>
+              <span className="w-3.5 h-3.5 rounded-full shrink-0" style={{ backgroundColor: g.color }} />
+              <span className="flex-1 text-[15px] text-white truncate">{g.name}</span>
+              <Trash2 size={18} className="text-red-400" />
+            </button>
+          ))}
+        </div>
+      </Sheet>
+    )
+  }
   if (confirmDelete) {
     return (
       <Sheet onClose={onClose}>
@@ -293,8 +382,24 @@ function MoreMenu({ page, playlist, onClose, onAdd }) {
         notifyLibraryChanged()
       },
     }) },
+    { label: playlist?.groups_enabled ? 'Desativar grupos de sequência' : 'Ativar grupos de sequência', icon: Layers,
+      onPress: async () => {
+        const r = await window.electron.playlists.toggleGroups(playlist.id)
+        onGroupsChanged?.()
+        shell.toast(r?.groups_enabled ? 'Grupos de sequência ativados' : 'Grupos de sequência desativados')
+      } },
+    { label: 'Novo grupo', icon: Tag, onPress: () => shell.prompt({
+      title: 'Nome do novo grupo', confirmLabel: 'Criar',
+      onSubmit: async name => {
+        await window.electron.playlists.createGroup(playlist.id, name)
+        if (!playlist.groups_enabled) await window.electron.playlists.toggleGroups(playlist.id)
+        onGroupsChanged?.()
+        shell.toast('Grupo criado — use "⋯" numa música para colocá-la nele')
+      },
+    }) },
+    groups.length > 0 && { label: 'Excluir um grupo', icon: Trash2, keep: true, onPress: () => setDeletingGroup(true) },
     { label: 'Excluir playlist', icon: Trash2, destructive: true, keep: true, onPress: () => setConfirmDelete(true) },
-  ] : [
+  ].filter(Boolean) : [
     { label: 'Importar do app Arquivos', icon: Download, onPress: shell.importFiles },
     { label: 'Procurar na pasta do NianPlay', icon: FolderSearch, onPress: shell.scanDocs },
     { label: shell.showMissing ? 'Ocultar músicas que não estão no iPhone' : 'Mostrar músicas que não estão no iPhone',

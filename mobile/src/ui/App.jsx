@@ -8,7 +8,7 @@ import { importFiles as importAudioFiles, scanDocuments, AUDIO_EXT } from '../pl
 import { notifyLibraryChanged } from '../platform/api'
 import { mediaUrl } from '../platform/paths'
 import { ShellContext } from './shell'
-import { Toast, useToast, PromptSheet, Sheet } from './common'
+import { Toast, useToast, PromptSheet, Sheet, isPlayable } from './common'
 import { MiniPlayer, TabBar } from './MiniPlayer'
 import { loadRecent } from './playContext'
 import NowPlaying from './NowPlaying'
@@ -80,6 +80,25 @@ function useMediaSession() {
   }, [isPlaying])
 }
 
+// Spotify's "Adicionar à fila": each added song goes after the ones added before it (not right
+// after the current song). Added songs are marked `_queued`; the new one is inserted after the
+// run of queued songs at the head of the upcoming list (works with shuffle too).
+function useAddToQueue(showToast) {
+  const { currentTrack, upcomingItems, playNext, playTrack } = usePlayer()
+  const ref = useRef({})
+  ref.current = { currentTrack, upcomingItems, playNext, playTrack }
+  return useCallback(track => {
+    const { currentTrack, upcomingItems, playNext, playTrack } = ref.current
+    if (!isPlayable(track)) { showToast('Esta música não está neste iPhone.', false); return }
+    if (!currentTrack) { playTrack(track, [track]); return }
+    let queued = 0
+    while (queued < upcomingItems.length && upcomingItems[queued].track?._queued) queued++
+    playNext({ ...track, _queued: true }, queued + 1)
+    navigator.vibrate?.(10)
+    showToast('Adicionada à fila')
+  }, [showToast])
+}
+
 function Shell() {
   const [tab, setTab] = useState('home')
   const [stacks, setStacks] = useState({ home: [], search: [], library: [] })
@@ -92,6 +111,7 @@ function Shell() {
   const fileInput = useRef(null)
   const busy = useRef(false)
   useMediaSession()
+  const addToQueue = useAddToQueue(showToast)
 
   useEffect(() => {
     loadRecent()
@@ -119,6 +139,7 @@ function Shell() {
   const shell = useMemo(() => ({
     navigate, back,
     toast: showToast,
+    addToQueue,
     prompt: opts => setPrompt(opts),
     showHelp: () => setHelp(true),
     importFiles: () => fileInput.current?.click(),
@@ -126,7 +147,7 @@ function Shell() {
     notifyLibrary: notifyLibraryChanged,
     showMissing,
     setShowMissing: v => { setShowMissingState(v); window.electron.settings.set('mobileShowMissing', v) },
-  }), [navigate, back, showToast, showMissing])
+  }), [navigate, back, showToast, showMissing, addToQueue])
 
   const top = stacks[tab][stacks[tab].length - 1]
   let screen

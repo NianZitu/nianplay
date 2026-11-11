@@ -130,8 +130,31 @@ export function PlayerProvider({ children }) {
         syncPlaybackClock()
       })
       audioRef.current.addEventListener('ended', () => { _advanceNext() })
+      // Follow the element's real state: the system can pause it on its own (iOS interruptions,
+      // phone calls, lock-screen controls), and the UI must not keep showing "playing"
+      audioRef.current.addEventListener('play', () => setIsPlaying(true))
+      audioRef.current.addEventListener('pause', () => { if (!audioRef.current.ended) setIsPlaying(false) })
     }
     return audioRef.current
+  }
+
+  // iOS can suspend/interrupt the AudioContext when the screen turns off while the <audio>
+  // element keeps "playing" — silence, with the UI still showing play (pausing and resuming
+  // by hand fixed it). Resume it automatically; if the system keeps refusing, really pause so
+  // the state stays truthful and the lock-screen play button brings the sound back.
+  const resumeTimerRef = useRef(null)
+  function keepAudioContextRunning(attempt = 0) {
+    clearTimeout(resumeTimerRef.current)
+    const ctx = contextRef.current
+    const audio = audioRef.current
+    if (!ctx || !audio || audio.paused || ctx.state === 'running') return
+    ctx.resume().catch(() => {})
+    if (attempt >= 8) {
+      audio.pause()
+      setIsPlaying(false)
+      return
+    }
+    resumeTimerRef.current = setTimeout(() => keepAudioContextRunning(attempt + 1), 1500)
   }
 
   function skipCutSegmentIfNeeded() {
@@ -160,6 +183,7 @@ export function PlayerProvider({ children }) {
       const ctx  = new (window.AudioContext || window.webkitAudioContext)()
       const gain = ctx.createGain()
       gain.connect(ctx.destination)
+      ctx.addEventListener('statechange', () => keepAudioContextRunning())
       contextRef.current  = ctx
       gainRef.current     = gain
       gainNodeRef.current = gain
@@ -185,8 +209,13 @@ export function PlayerProvider({ children }) {
     return gain
   }
 
+  // Per-track LUFS gain × the app's output level. The iPhone app sets
+  // window.nianplayPlatform.outputGain (Perfil → "Volume do NianPlay", 50% by default) because
+  // iOS ignores audio.volume — the gain node is the only way to make it quieter there.
   function applyTrackGain(track) {
-    if (gainNodeRef.current) gainNodeRef.current.gain.value = Math.pow(10, ((track?.gain) || 0) / 20)
+    if (!gainNodeRef.current) return
+    const output = Number(window.nianplayPlatform?.outputGain ?? 1)
+    gainNodeRef.current.gain.value = Math.pow(10, ((track?.gain) || 0) / 20) * (Number.isFinite(output) ? output : 1)
   }
 
   // A context created outside a tap (session restore) or interrupted by the system (iOS
@@ -312,18 +341,20 @@ export function PlayerProvider({ children }) {
   }, [])
 
   // Insert track to play immediately after the current track
-  const playNext = useCallback((track) => {
+  // `ahead`: 1 = right after the current track; 2 = after the next one... The iPhone app uses it
+  // for Spotify's "Adicionar à fila" (each added track goes after the ones added before it).
+  const playNext = useCallback((track, ahead = 1) => {
     const q = [...queueRef.current]
     const idx = currentIdxRef.current < 0 ? 0 : currentIdxRef.current
-    const insertAt = idx + 1
+    const insertAt = Math.min(idx + Math.max(1, ahead), q.length)
     q.splice(insertAt, 0, track)
     setQueue(q)
     queueRef.current = q
 
     if (shuffleRef.current) {
-      // Shift all indices >= insertAt, then insert at shuffledPos + 1
+      // Shift all indices >= insertAt, then insert `ahead` steps after the current shuffle position
       const adjusted = shuffledOrderRef.current.map(i => i >= insertAt ? i + 1 : i)
-      adjusted.splice(shuffledPosRef.current + 1, 0, insertAt)
+      adjusted.splice(Math.min(shuffledPosRef.current + Math.max(1, ahead), adjusted.length), 0, insertAt)
       setShuffledOrder(adjusted)
       shuffledOrderRef.current = adjusted
     }
@@ -481,6 +512,13 @@ export function PlayerProvider({ children }) {
     return () => clearTimeout(persistQueueTimerRef.current)
   }, [queue])
 
+  // Screen off/on and app background/foreground are when iOS interrupts the AudioContext
+  React.useEffect(() => {
+    const onVisibility = () => keepAudioContextRunning()
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => { document.removeEventListener('visibilitychange', onVisibility); clearTimeout(resumeTimerRef.current) }
+  }, [])
+
   React.useEffect(() => {
     function handleBeforeUnload() {
       persistState()
@@ -506,9 +544,7 @@ export function PlayerProvider({ children }) {
     const current = nextQueue[currentIdxRef.current]
     if (current?.id === updatedTrack.id) {
       currentTrackRef.current = current
-      if (gainNodeRef.current) {
-        gainNodeRef.current.gain.value = Math.pow(10, (current.gain || 0) / 20)
-      }
+      applyTrackGain(current)
       skipCutSegmentIfNeeded()
       syncPlaybackClock()
     }

@@ -16,6 +16,9 @@ export async function initPlatform() {
     mediaUrl,
     // "Equalização no iPhone" (Conta → Ajustes). Applied when the app starts.
     webAudio: db.settings.read().mobileWebAudio !== false,
+    // "Volume do NianPlay" — multiplies the gain node (iOS ignores audio.volume). 50% by default:
+    // with the LUFS gains the music was too loud even at the lowest system volume.
+    outputGain: Number(db.settings.read().mobileVolume ?? 0.5),
   }
   installElectronApi()
 

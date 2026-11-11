@@ -205,6 +205,25 @@ const playlists = {
     return true
   },
 
+  // Same as the desktop's playlists:deleteGroup — the tracks stay in the playlist, ungrouped
+  deleteGroup: async groupId => {
+    db.playlistGroups.write(db.playlistGroups.read().filter(g => g.id !== groupId))
+    const rows = db.playlistTracks.read()
+    rows.forEach(r => { if (r.group_id === groupId) { r.group_id = null; r.group_position = 0 } })
+    db.playlistTracks.write(rows)
+    return true
+  },
+
+  reorderGroup: async (playlistId, groupId, orderedTrackIds) => {
+    const rows = db.playlistTracks.read()
+    orderedTrackIds.forEach((trackId, i) => {
+      const row = rows.find(r => r.playlist_id === playlistId && r.group_id === groupId && r.track_id === trackId)
+      if (row) row.group_position = i
+    })
+    db.playlistTracks.write(rows)
+    return true
+  },
+
   toggleGroups: async id => {
     const list = db.playlists.read()
     const p = list.find(x => x.id === id)

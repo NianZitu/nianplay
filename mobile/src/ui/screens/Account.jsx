@@ -6,6 +6,7 @@
 import React, { useEffect, useState } from 'react'
 import { ChevronLeft, User, DownloadCloud, Loader2, LogOut, Download, FolderSearch, HelpCircle, SlidersHorizontal } from 'lucide-react'
 import { useAuth } from '../../../../src/renderer/contexts/AuthContext'
+import { usePlayer } from '../../../../src/renderer/store/PlayerContext'
 import { notifyLibraryChanged } from '../../platform/api'
 import { useShell } from '../shell'
 
@@ -126,6 +127,16 @@ export default function Account() {
     if (syncStatus?.lastSync && !syncStatus.downloading && !syncStatus.error) shell.toast('Biblioteca atualizada com a nuvem')
   }, [syncStatus?.lastSync])
 
+  // Applies immediately: the next gain update of the current song uses the new level
+  const { currentTrack, updateQueuedTrack } = usePlayer()
+  const [outputGain, setOutputGain] = useState(Number(window.nianplayPlatform?.outputGain ?? 0.5))
+  async function setOutput(v) {
+    setOutputGain(v)
+    window.nianplayPlatform.outputGain = v
+    if (currentTrack) updateQueuedTrack(currentTrack)
+    await window.electron.settings.set('mobileVolume', v)
+  }
+
   async function toggleWebAudio() {
     const next = !webAudio
     setWebAudio(next)
@@ -184,6 +195,23 @@ export default function Account() {
         right={<span className={`w-12 h-7 rounded-full p-0.5 transition-colors shrink-0 ${webAudio ? 'bg-brand-500' : 'bg-white/20'}`}>
           <span className={`block w-6 h-6 rounded-full bg-white transition-transform ${webAudio ? 'translate-x-5' : ''}`} />
         </span>} />
+
+      <div className="px-5 py-3.5">
+        <p className="text-[15px] text-white">Volume do NianPlay</p>
+        <p className="text-[13px] text-white/45 mt-0.5 leading-snug">
+          {webAudio ? 'Deixa todas as músicas mais baixas, para controlar melhor pelo volume do iPhone.'
+            : 'Só funciona com a equalização de volume ligada.'}
+        </p>
+        <div className="mt-3 grid grid-cols-4 gap-2">
+          {[0.25, 0.5, 0.75, 1].map(v => (
+            <button key={v} disabled={!webAudio} onClick={() => setOutput(v)}
+              className={`h-10 rounded-full text-sm font-bold border transition-colors disabled:opacity-35
+                ${Math.abs(outputGain - v) < 0.01 ? 'bg-brand-500 border-brand-500 text-surface-900' : 'border-white/25 text-white'}`}>
+              {Math.round(v * 100)}%
+            </button>
+          ))}
+        </div>
+      </div>
 
       <Title>Sobre</Title>
       <Row label="Versão" sub={`NianPlay para iPhone ${version}`} />
