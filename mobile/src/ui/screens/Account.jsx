@@ -49,10 +49,13 @@ function LoginForm() {
 
   async function submit() {
     setError(''); setInfo(''); setBusy(true)
+    const timeout = new Promise((_, rej) => setTimeout(() => rej({ code: 'nianplay/timeout' }), 20000))
     try {
-      if (mode === 'login') await login(email.trim(), password)
-      else await register(email.trim(), password, name.trim())
-    } catch (e) { setError(authMessage(e)) }
+      await Promise.race([
+        mode === 'login' ? login(email.trim(), password) : register(email.trim(), password, name.trim()),
+        timeout,
+      ])
+    } catch (e) { setError(e?.code === 'nianplay/timeout' ? 'O servidor não respondeu. Confira a internet e tente de novo.' : authMessage(e)) }
     setBusy(false)
   }
   async function reset() {
@@ -106,6 +109,15 @@ export default function Account() {
 
   useEffect(() => { window.electron.app.getVersion().then(setVersion) }, [])
 
+  // Firebase normally answers "logged in or not" in under a second. If it doesn't (no internet,
+  // blocked request), show the form with a notice instead of spinning forever.
+  const [authSlow, setAuthSlow] = useState(false)
+  useEffect(() => {
+    if (user !== undefined) { setAuthSlow(false); return }
+    const t = setTimeout(() => setAuthSlow(true), 10000)
+    return () => clearTimeout(t)
+  }, [user])
+
   async function download() {
     await syncFromCloud()
     notifyLibraryChanged()
@@ -129,8 +141,15 @@ export default function Account() {
         <p className="text-base font-bold text-white">Perfil e ajustes</p>
       </div>
 
-      {user === undefined ? (
+      {user === undefined && !authSlow ? (
         <div className="flex justify-center py-16"><Loader2 className="animate-spin text-white/50" /></div>
+      ) : user === undefined ? (
+        <div className="pt-4">
+          <p className="mx-5 mb-4 rounded-lg bg-amber-500/10 border border-amber-400/30 px-4 py-3 text-sm text-amber-200 leading-relaxed">
+            A conta está demorando para responder. Confira a internet — você pode tentar entrar mesmo assim.
+          </p>
+          <LoginForm />
+        </div>
       ) : !user ? (
         <div className="pt-4"><LoginForm /></div>
       ) : (

@@ -30,10 +30,16 @@ const firebaseConfig = {
 const firebaseApp = initializeApp(firebaseConfig)
 
 // indexedDBLocalPersistence é necessário no Electron (contextIsolation bloqueia localStorage)
-export const auth = initializeAuth(firebaseApp, {
-  persistence: indexedDBLocalPersistence,
-  popupRedirectResolver: browserPopupRedirectResolver,
-})
+//
+// iPhone app (mobile/, Capacitor): NO popupRedirectResolver. It loads a hidden iframe from the
+// authDomain to support Google popup/redirect sign-in; inside the iOS WebView (capacitor://)
+// that iframe never loads and Auth never finishes initializing — onAuthStateChanged never fires
+// and the account screen spins forever. The phone only uses e-mail/password, which doesn't need it.
+// window.Capacitor is injected by the native side before any page script runs.
+const isNativeApp = typeof window !== 'undefined' && Boolean(window.Capacitor?.isNativePlatform?.())
+export const auth = initializeAuth(firebaseApp, isNativeApp
+  ? { persistence: indexedDBLocalPersistence }
+  : { persistence: indexedDBLocalPersistence, popupRedirectResolver: browserPopupRedirectResolver })
 export const db = getFirestore(firebaseApp)
 
 // Deterministic cloud ID from track or playlist fields

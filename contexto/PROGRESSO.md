@@ -6,6 +6,22 @@ Cada entrada: versão, data, o que mudou, por quê, arquivos e status.
 
 ---
 
+## iPhone 0.1.1 — 11/11/2026 — Login travado no iPhone
+
+**Teste do usuário na 0.1.0:** instalou pelo AltServer (o erro "The app could not be found" sumiu ao usar o `.ipa`
+num caminho sem acentos: `C:\NianPlay\NianPlay.ipa` — o AltServer do Windows não lida com "BACKUP FORMATAÇÃO"),
+o app abre e a interface funciona, mas Perfil e ajustes ficava carregando para sempre.
+
+**Causa:** `src/renderer/firebase.js` inicializa o Auth com `browserPopupRedirectResolver` (necessário para o login
+com Google por popup no desktop). Ele carrega um iframe do authDomain; dentro do WKWebView (`capacitor://`) esse iframe
+não carrega e o Auth nunca termina de inicializar → `onAuthStateChanged` nunca dispara → `user` fica `undefined`.
+
+**Correção:** no app nativo (`window.Capacitor.isNativePlatform()`, injetado antes dos scripts) o Auth é inicializado
+só com `indexedDBLocalPersistence`, sem o resolver (o iPhone só usa e-mail/senha). Desktop inalterado. A tela de conta
+agora mostra o formulário com aviso se o Auth não responder em 10 s, e "Entrar" desiste após 20 s com mensagem.
+
+---
+
 ## iPhone 0.1.0 — 11/11/2026 — Primeira versão mobile (.ipa para AltStore)
 
 **Pedido do usuário:** portar o NianPlay para o iPhone (ele instalou o AltStore) e gerar um `.ipa`. Durante o
