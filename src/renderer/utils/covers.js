@@ -9,6 +9,8 @@
 // The whole path is one encoded segment, so "..", "#", "%", spaces and accents are safe.
 export function mediaUrl(p) {
   if (!p) return ''
+  // The iPhone app (mobile/) serves local files its own way (Capacitor's file URL)
+  if (typeof window !== 'undefined' && window.nianplayPlatform?.mediaUrl) return window.nianplayPlatform.mediaUrl(p)
   let local = String(p)
   let query = ''
   if (/^file:/i.test(local)) {
@@ -27,7 +29,7 @@ export function mediaUrl(p) {
 // Any image/video source: remote and inline URLs untouched, local ones via nianmedia://
 export function mediaSrc(p) {
   if (!p) return null
-  if (/^(https?|data|blob|nianmedia):/i.test(p)) return p
+  if (/^(https?|data|blob|nianmedia|capacitor):/i.test(p)) return p
   return mediaUrl(p)
 }
 

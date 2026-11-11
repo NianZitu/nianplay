@@ -1,0 +1,79 @@
+# Builds the NianPlay iPhone app (mobile/) into an UNSIGNED .ipa on a macOS runner.
+# AltStore/SideStore sign it with the user's Apple ID when installing.
+#
+# Runs on pushes to the `mobile` branch that touch the app, or manually (Actions → iOS (.ipa) → Run).
+# The .ipa is uploaded as the artifact "NianPlay-ipa". Desktop releases are not affected.
+name: iOS (.ipa)
+
+on:
+  push:
+    branches: [mobile]
+    paths:
+      - 'mobile/**'
+      - 'src/renderer/**'
+      - 'tailwind.config.js'
+      - '.github/workflows/ios.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'   # the root package.json is the desktop app; Electron isn't needed here
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies (shared renderer + Capacitor)
+        run: |
+          npm ci --no-audit --no-fund
+          npm ci --no-audit --no-fund --prefix mobile
+
+      - name: Build the web layer
+        run: npx vite build --config mobile/vite.config.js
+
+      - name: Generate the iOS project
+        working-directory: mobile
+        run: |
+          npx cap add ios
+          chmod +x ci/patch-ios.sh
+          ./ci/patch-ios.sh "$(node -p "require('./package.json').version")" "${{ github.run_number }}"
+          npx cap sync ios
+
+      - name: Build (unsigned)
+        working-directory: mobile/ios/App
+        run: |
+          xcodebuild -version
+          xcodebuild -project App.xcodeproj -scheme App -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/NianPlay.xcarchive" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" DEVELOPMENT_TEAM="" \
+            archive | tail -40
+
+      - name: Package .ipa
+        run: |
+          APP="$RUNNER_TEMP/NianPlay.xcarchive/Products/Applications/App.app"
+          test -d "$APP"
+          VERSION="$(node -p "require('./mobile/package.json').version")"
+          mkdir -p "$RUNNER_TEMP/ipa/Payload"
+          cp -R "$APP" "$RUNNER_TEMP/ipa/Payload/"
+          (cd "$RUNNER_TEMP/ipa" && zip -qry "NianPlay-${VERSION}.ipa" Payload)
+          mkdir -p out && cp "$RUNNER_TEMP/ipa/NianPlay-${VERSION}.ipa" out/
+          echo "--- checks"
+          lipo -info "$APP/App"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" -c "Print :CFBundleDisplayName" -c "Print :CFBundleShortVersionString" -c "Print :CFBundleVersion" -c "Print :UIBackgroundModes" -c "Print :UIFileSharingEnabled" "$APP/Info.plist"
+          test -f "$APP/public/index.html"
+          ls -la out
+          echo "### NianPlay ${VERSION} (build ${{ github.run_number }})" >> "$GITHUB_STEP_SUMMARY"
+          echo "Baixe o artefato **NianPlay-ipa** e instale pelo AltStore." >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NianPlay-ipa
+          path: out/*.ipa
+          if-no-files-found: error
+          retention-days: 30

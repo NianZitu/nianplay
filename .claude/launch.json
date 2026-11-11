@@ -6,6 +6,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "vite"],
       "port": 5173
+    },
+    {
+      "name": "nianplay-mobile",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["vite", "--config", "mobile/vite.config.js"],
+      "port": 5174
     }
   ]
 }

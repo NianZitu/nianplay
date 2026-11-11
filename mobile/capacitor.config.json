@@ -1,0 +1,10 @@
+{
+  "appId": "com.nianplay.mobile",
+  "appName": "NianPlay",
+  "webDir": "dist",
+  "backgroundColor": "#0c0b09",
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#0c0b09"
+  }
+}

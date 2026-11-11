@@ -167,6 +167,35 @@ export function PlayerProvider({ children }) {
     return { ctx: contextRef.current, gain: gainRef.current }
   }
 
+  // The iPhone app can turn Web Audio off (setting "Equalização no iPhone"): iOS may suspend an
+  // AudioContext in the background, which silences playback. Without it the per-track LUFS gain
+  // is not applied (iOS ignores audio.volume, so there is no other way to apply it).
+  const webAudioEnabled = () => window.nianplayPlatform?.webAudio !== false
+
+  // Routes the <audio> element through the GainNode once (createMediaElementSource is one-way)
+  function connectAudioGraph(audio) {
+    if (!webAudioEnabled()) return null
+    const { gain } = ensureAudioContext()
+    gainNodeRef.current = gain
+    if (!audio._connected) {
+      const source = contextRef.current.createMediaElementSource(audio)
+      source.connect(gain)
+      audio._connected = true
+    }
+    return gain
+  }
+
+  function applyTrackGain(track) {
+    if (gainNodeRef.current) gainNodeRef.current.gain.value = Math.pow(10, ((track?.gain) || 0) / 20)
+  }
+
+  // A context created outside a tap (session restore) or interrupted by the system (iOS
+  // background, phone call) stays suspended until resumed — and then outputs nothing
+  function resumeAudioContext() {
+    const ctx = contextRef.current
+    if (ctx && ctx.state !== 'running') ctx.resume().catch(() => {})
+  }
+
   // Small, frequent: index/time/volume/shuffle. The (large) queue is saved separately
   // by persistQueue() only when it changes.
   function persistState() {
@@ -208,7 +237,8 @@ export function PlayerProvider({ children }) {
     setCurrentIdx(queueIdx)
     currentTrackRef.current = track
     audioRef.current.src = mediaUrl(track.file_path)
-    if (gainNodeRef.current) gainNodeRef.current.gain.value = Math.pow(10, (track.gain || 0) / 20)
+    applyTrackGain(track)
+    resumeAudioContext()
     audioRef.current.volume = volumeRef.current
     audioRef.current.play().then(() => setIsPlaying(true)).catch(console.error)
   }
@@ -248,14 +278,8 @@ export function PlayerProvider({ children }) {
     const safeIdx = idx >= 0 ? idx : 0
 
     ensureAudioElement()
-
-    const { gain } = ensureAudioContext()
-    gainNodeRef.current = gain
-    if (!audioRef.current._connected) {
-      const source = contextRef.current.createMediaElementSource(audioRef.current)
-      source.connect(gain)
-      audioRef.current._connected = true
-    }
+    connectAudioGraph(audioRef.current)
+    resumeAudioContext()
 
     setCurrentIdx(safeIdx)
     currentIdxRef.current = safeIdx
@@ -267,7 +291,7 @@ export function PlayerProvider({ children }) {
     }
 
     audioRef.current.src = mediaUrl(track.file_path)
-    gain.gain.value = Math.pow(10, (track.gain || 0) / 20)
+    applyTrackGain(track)
     audioRef.current.volume = volumeRef.current
     audioRef.current.play().then(() => setIsPlaying(true)).catch(console.error)
   }, [])
@@ -278,6 +302,7 @@ export function PlayerProvider({ children }) {
       audioRef.current.pause()
       setIsPlaying(false)
     } else {
+      resumeAudioContext()
       audioRef.current.play().then(() => setIsPlaying(true))
     }
   }, [isPlaying])
@@ -420,15 +445,9 @@ export function PlayerProvider({ children }) {
         currentTrackRef.current = track
         if (track?.file_path) {
           const audio = ensureAudioElement()
-          const { gain } = ensureAudioContext()
-          gainNodeRef.current = gain
-          if (!audio._connected) {
-            const source = contextRef.current.createMediaElementSource(audio)
-            source.connect(gain)
-            audio._connected = true
-          }
+          connectAudioGraph(audio)
           audio.src = mediaUrl(track.file_path)
-          gain.gain.value = Math.pow(10, (track.gain || 0) / 20)
+          applyTrackGain(track)
           audio.volume = volumeRef.current
           const resumeAt = Math.max(0, Number(saved.currentTime) || 0)
           audio.addEventListener('loadedmetadata', function setResumeTimeOnce() {

@@ -1,0 +1,21 @@
+{
+  "name": "nianplay-mobile",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "NianPlay para iPhone (Capacitor). Reaproveita o player e a sincronizacao de src/renderer.",
+  "scripts": {
+    "dev": "vite --config vite.config.js",
+    "build": "vite build --config vite.config.js"
+  },
+  "dependencies": {
+    "@capacitor/app": "8.1.2",
+    "@capacitor/core": "8.6.0",
+    "@capacitor/filesystem": "8.1.5",
+    "@capacitor/ios": "8.6.0",
+    "@capacitor/status-bar": "8.0.4"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.6.0"
+  }
+}

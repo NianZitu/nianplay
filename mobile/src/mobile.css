@@ -1,0 +1,34 @@
+/* Desktop base first (Tailwind directives, colors, animations), then the phone-specific rules */
+@import '../../src/renderer/styles/globals.css';
+
+/* iPhone app — on top of the desktop's globals.css (colors, animations) */
+html, body, #root { height: 100%; overscroll-behavior: none; }
+body {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+input, textarea { -webkit-user-select: text; user-select: text; }
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { scrollbar-width: none; }
+*::-webkit-scrollbar { display: none; }
+
+@layer components {
+  /* 16px+ font: iOS zooms into smaller inputs */
+  .m-input {
+    @apply w-full h-12 rounded-lg bg-white/10 border border-white/10 px-4 text-base text-white
+           placeholder-white/40 outline-none focus:border-brand-500/70;
+  }
+  .m-btn-primary {
+    @apply w-full h-12 rounded-full bg-brand-500 text-surface-900 font-bold text-base
+           active:scale-[0.98] transition-transform disabled:opacity-40;
+  }
+  .m-btn-ghost {
+    @apply w-full h-12 rounded-full border border-white/30 text-white font-bold text-base active:bg-white/10;
+  }
+  .m-btn-danger {
+    @apply w-full h-12 rounded-full bg-red-500 text-white font-bold text-base active:scale-[0.98] transition-transform;
+  }
+}
