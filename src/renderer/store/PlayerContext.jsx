@@ -117,7 +117,9 @@ export function PlayerProvider({ children }) {
 
   function ensureAudioElement() {
     if (!audioRef.current) {
-      audioRef.current = new Audio()
+      // The iPhone app can supply a stand-in that plays through the native iOS player
+      // (mobile/src/platform/nativeAudio.js); everywhere else it is a plain <audio> element.
+      audioRef.current = window.nianplayPlatform?.createAudio?.() || new Audio()
       // Audio comes from nianmedia:// (another origin than the UI). Without CORS mode the
       // MediaElementSource → GainNode chain outputs silence for cross-origin media.
       audioRef.current.crossOrigin = 'anonymous'
@@ -134,6 +136,9 @@ export function PlayerProvider({ children }) {
       // phone calls, lock-screen controls), and the UI must not keep showing "playing"
       audioRef.current.addEventListener('play', () => setIsPlaying(true))
       audioRef.current.addEventListener('pause', () => { if (!audioRef.current.ended) setIsPlaying(false) })
+      // Native player only: it moved to another song by itself (song ended while the app was in
+      // the background, or next/previous on the lock screen) — follow it without reloading audio
+      audioRef.current.addEventListener('nativeadvance', (e) => adoptNativeTrack(e.track))
     }
     return audioRef.current
   }
@@ -213,6 +218,8 @@ export function PlayerProvider({ children }) {
   // window.nianplayPlatform.outputGain (Perfil → "Volume do NianPlay", 50% by default) because
   // iOS ignores audio.volume — the gain node is the only way to make it quieter there.
   function applyTrackGain(track) {
+    // Native player (iPhone): the same gain goes to the AVPlayer volume
+    if (audioRef.current?.setGain) { audioRef.current.setGain(track); return }
     if (!gainNodeRef.current) return
     const output = Number(window.nianplayPlatform?.outputGain ?? 1)
     gainNodeRef.current.gain.value = Math.pow(10, ((track?.gain) || 0) / 20) * (Number.isFinite(output) ? output : 1)
@@ -257,6 +264,40 @@ export function PlayerProvider({ children }) {
     return order
   }
 
+  // The native player (iPhone) takes the whole track: title/cover for the lock screen, cuts, gain
+  function setAudioSource(audio, track) {
+    if (audio.setTrack) audio.setTrack(track)
+    else audio.src = mediaUrl(track.file_path)
+  }
+
+  // The native player advanced by itself: point the queue at the song it is playing now
+  function adoptNativeTrack(track) {
+    const q = queueRef.current
+    if (!track || q.length === 0) return
+    let idx = q.indexOf(track)
+    if (idx < 0) {
+      // Same song as another object (queue edited meanwhile): the first match after the current one
+      const from = Math.max(0, currentIdxRef.current)
+      for (let i = 1; i <= q.length && idx < 0; i++) {
+        const j = (from + i) % q.length
+        if (q[j]?.id === track.id) idx = j
+      }
+    }
+    if (idx < 0) return
+    currentIdxRef.current = idx
+    setCurrentIdx(idx)
+    currentTrackRef.current = q[idx]
+    if (shuffleRef.current) {
+      const pos = shuffledOrderRef.current.indexOf(idx)
+      if (pos >= 0) {
+        shuffledPosRef.current = pos
+        setShuffledPos(pos)
+      }
+    }
+    setIsPlaying(true)
+    syncPlaybackClock()
+  }
+
   function _playByIdx(queueIdx) {
     const q = queueRef.current
     if (queueIdx < 0 || queueIdx >= q.length) return
@@ -265,7 +306,7 @@ export function PlayerProvider({ children }) {
     currentIdxRef.current = queueIdx
     setCurrentIdx(queueIdx)
     currentTrackRef.current = track
-    audioRef.current.src = mediaUrl(track.file_path)
+    setAudioSource(audioRef.current, track)
     applyTrackGain(track)
     resumeAudioContext()
     audioRef.current.volume = volumeRef.current
@@ -319,7 +360,7 @@ export function PlayerProvider({ children }) {
       buildShuffleOrder(safeIdx, q.length)
     }
 
-    audioRef.current.src = mediaUrl(track.file_path)
+    setAudioSource(audioRef.current, track)
     applyTrackGain(track)
     audioRef.current.volume = volumeRef.current
     audioRef.current.play().then(() => setIsPlaying(true)).catch(console.error)
@@ -477,7 +518,7 @@ export function PlayerProvider({ children }) {
         if (track?.file_path) {
           const audio = ensureAudioElement()
           connectAudioGraph(audio)
-          audio.src = mediaUrl(track.file_path)
+          setAudioSource(audio, track)
           applyTrackGain(track)
           audio.volume = volumeRef.current
           const resumeAt = Math.max(0, Number(saved.currentTime) || 0)
@@ -568,6 +609,11 @@ export function PlayerProvider({ children }) {
   }, [queue, shuffle, shuffledOrder, shuffledPos, currentIdx])
 
   const upcomingTracks = useMemo(() => upcomingItems.map(item => item.track), [upcomingItems])
+
+  // Native player (iPhone): it keeps the next songs so it can advance while JS is frozen in the background
+  React.useEffect(() => {
+    audioRef.current?.setUpcoming?.(upcomingTracks)
+  }, [upcomingTracks, currentTrack])
 
   const value = useMemo(() => ({
     queue, setQueue,

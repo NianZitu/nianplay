@@ -1,0 +1,15 @@
+{
+  "name": "nian-native-player",
+  "version": "1.0.0",
+  "private": true,
+  "description": "NianPlay: native iOS audio playback (AVPlayer) with a native queue, lock-screen controls, per-track volume and cut segments. Plays in the background, where the WebView's JavaScript is suspended.",
+  "main": "index.js",
+  "type": "module",
+  "files": ["index.js", "web.js", "ios/Sources", "Package.swift"],
+  "capacitor": {
+    "ios": { "src": "ios" }
+  },
+  "peerDependencies": {
+    "@capacitor/core": ">=8.0.0"
+  }
+}

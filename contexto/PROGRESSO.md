@@ -6,6 +6,46 @@ Cada entrada: versão, data, o que mudou, por quê, arquivos e status.
 
 ---
 
+## iPhone 0.2.0 — 11/11/2026 — Player nativo: música não para mais ao sair do app
+
+**Relato do usuário (0.1.1):** com o celular desbloqueado, ao desligar a tela ou só sair do app, a música ficava muda
+mas a interface mostrava tocando — e o tempo continuava andando (ao voltar, estava mais adiantada). Pausar e
+despausar resolvia.
+
+**Causa:** o áudio passava pelo Web Audio (`createMediaElementSource` → GainNode) para aplicar o ganho LUFS, já que o
+iOS ignora `audio.volume`. O iOS suspende o AudioContext quando o app vai para segundo plano; o `<audio>` segue
+"tocando" sem som. O watchdog da 0.1.2 (`ctx.resume()`) não resolve: com o app fora da tela o JS nem roda.
+
+**Correção:** plugin próprio `mobile/plugins/nian-native-player` (Swift, AVPlayer) — toca os arquivos direto,
+com a fila do lado nativo (o JS fica congelado em segundo plano), cortes, volume por faixa e tela de bloqueio
+(MPNowPlayingInfoCenter/MPRemoteCommandCenter, interrupções de ligação). `nativeAudio.js` imita o `<audio>` para
+o PlayerContext; ganchos novos no PlayerContext: `createAudio`, `setAudioSource`, `setGain` em `applyTrackGain`,
+efeito que envia `upcomingTracks` e `adoptNativeTrack`. "Equalização de volume" e "Volume do NianPlay" agora valem
+na hora (volume do AVPlayer). Desktop inalterado (`createAudio` não existe lá).
+
+**Testes:** navegador com `nianNativeWeb=1` (web.js imitando o Swift): 3 faixas de 4 s avançam sozinhas A→B→C e o
+mini player acompanha; a lista "a seguir" é reenviada a cada troca (B,C → C,A → A,B); "próximo" da tela de bloqueio
+simulado troca a música e a UI acompanha; pausa vinda do nativo vira "Tocar" na UI e o toque em tocar retoma o
+nativo; volume 0,5 (ganho 0 × 50%). Sem a flag o caminho antigo (Web Audio) segue igual. Achado no teste: o carregador
+web do Capacitor cria uma instância por chamada simultânea antes da primeira resolver (listeners espalhados) — o
+`index.js` do plugin guarda a instância. **O Swift só é compilado no CI (Mac); o teste real é no iPhone.**
+Também: `TrackRow` não espalha mais `wasLongPress` no `<div>` (aviso do React).
+
+---
+
+## iPhone 0.1.2 — 11/11/2026 — Grupos, deslizar para a fila, volume 50%
+
+- **Grupos de sequência no celular:** pastas coloridas na playlist (abrir/fechar), botão para tocar o grupo (fila
+  agrupada a partir da primeira faixa do grupo), "⋯" da playlist: ativar/desativar grupos, novo grupo, excluir grupo;
+  menu da faixa: adicionar a um grupo, subir/descer no grupo. Ao baixar da nuvem, `groups_enabled` é aplicado.
+- **Deslizar para a direita = Adicionar à fila** (como no Spotify): faixa marcada `_queued`, entra depois das que já
+  foram adicionadas (`playNext(track, ahead)` no PlayerContext). Deslize curto não adiciona.
+- **Volume 50% mais baixo:** `outputGain` multiplica o ganho (Perfil → "Volume do NianPlay": 25/50/75/100%).
+- **Tentativa para a música muda:** `keepAudioContextRunning` retoma o AudioContext; o estado play/pause segue o
+  elemento real. Não resolveu o caso do app em segundo plano → player nativo na 0.2.0.
+
+---
+
 ## iPhone 0.1.1 — 11/11/2026 — Login travado no iPhone
 
 **Teste do usuário na 0.1.0:** instalou pelo AltServer (o erro "The app could not be found" sumiu ao usar o `.ipa`

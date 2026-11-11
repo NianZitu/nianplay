@@ -105,7 +105,10 @@ export default function Account() {
   const shell = useShell()
   const { user, accountProfile, syncFromCloud, syncStatus, logout } = useAuth()
   const [version, setVersion] = useState('')
-  const [webAudio, setWebAudio] = useState(window.nianplayPlatform?.webAudio !== false)
+  // Native player: the LUFS toggle applies at once and the volume always works.
+  // Web fallback (old builds / browser): it needs Web Audio, changed only on the next app start.
+  const native = Boolean(window.nianplayPlatform?.nativePlayer)
+  const [webAudio, setWebAudio] = useState(native ? window.nianplayPlatform.lufs !== false : window.nianplayPlatform?.webAudio !== false)
   const [savedWebAudio] = useState(webAudio)
 
   useEffect(() => { window.electron.app.getVersion().then(setVersion) }, [])
@@ -140,6 +143,10 @@ export default function Account() {
   async function toggleWebAudio() {
     const next = !webAudio
     setWebAudio(next)
+    if (native) {
+      window.nianplayPlatform.lufs = next
+      if (currentTrack) updateQueuedTrack(currentTrack)
+    }
     await window.electron.settings.set('mobileWebAudio', next)
   }
 
@@ -190,7 +197,7 @@ export default function Account() {
 
       <Title>Reprodução</Title>
       <Row icon={SlidersHorizontal} label="Equalização de volume (LUFS)"
-        sub={`Aplica o ganho de cada música calculado no computador.${webAudio !== savedWebAudio ? ' Vale ao reabrir o app.' : ' Se a música parar quando a tela bloqueia, desligue.'}`}
+        sub={`Aplica o ganho de cada música calculado no computador.${native ? '' : webAudio !== savedWebAudio ? ' Vale ao reabrir o app.' : ' Se a música parar quando a tela bloqueia, desligue.'}`}
         onPress={toggleWebAudio}
         right={<span className={`w-12 h-7 rounded-full p-0.5 transition-colors shrink-0 ${webAudio ? 'bg-brand-500' : 'bg-white/20'}`}>
           <span className={`block w-6 h-6 rounded-full bg-white transition-transform ${webAudio ? 'translate-x-5' : ''}`} />
@@ -199,12 +206,12 @@ export default function Account() {
       <div className="px-5 py-3.5">
         <p className="text-[15px] text-white">Volume do NianPlay</p>
         <p className="text-[13px] text-white/45 mt-0.5 leading-snug">
-          {webAudio ? 'Deixa todas as músicas mais baixas, para controlar melhor pelo volume do iPhone.'
+          {native || webAudio ? 'Deixa todas as músicas mais baixas, para controlar melhor pelo volume do iPhone.'
             : 'Só funciona com a equalização de volume ligada.'}
         </p>
         <div className="mt-3 grid grid-cols-4 gap-2">
           {[0.25, 0.5, 0.75, 1].map(v => (
-            <button key={v} disabled={!webAudio} onClick={() => setOutput(v)}
+            <button key={v} disabled={!native && !webAudio} onClick={() => setOutput(v)}
               className={`h-10 rounded-full text-sm font-bold border transition-colors disabled:opacity-35
                 ${Math.abs(outputGain - v) < 0.01 ? 'bg-brand-500 border-brand-500 text-surface-900' : 'border-white/25 text-white'}`}>
               {Math.round(v * 100)}%

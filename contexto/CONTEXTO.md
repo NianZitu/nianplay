@@ -175,8 +175,23 @@ Interface **no estilo do Spotify mobile** (pedido do usuário), com as cores e b
   roda no navegador com o Filesystem web do Capacitor (IndexedDB); arquivos importados tocam via blob só na sessão.
 - **Reaproveita** `src/renderer`: `store/PlayerContext.jsx` (player, ganho, cortes, grupos), `contexts/AuthContext.jsx`
   (login e "Baixar da nuvem"), `utils/*`, `components/VirtualRows.jsx`, `globals.css` e o tema do Tailwind. Ganchos
-  no código compartilhado (sem efeito no desktop): `window.nianplayPlatform.mediaUrl` (covers.js) e
-  `window.nianplayPlatform.webAudio === false` desliga o Web Audio (PlayerContext.connectAudioGraph).
+  no código compartilhado (sem efeito no desktop): `window.nianplayPlatform.mediaUrl` (covers.js),
+  `webAudio === false` desliga o Web Audio (PlayerContext.connectAudioGraph), `outputGain` ("Volume do NianPlay",
+  50% por padrão) e `createAudio()` — o PlayerContext cria o "elemento de áudio" por ele (player nativo, abaixo) e
+  usa os ganchos opcionais `audio.setTrack(track)`, `audio.setGain(track)`, `audio.setUpcoming(tracks)` e o evento
+  `nativeadvance`.
+- **Player nativo (0.2.0, `mobile/plugins/nian-native-player/`, plugin Capacitor local via SPM):** AVPlayer em Swift
+  (`ios/Sources/NianNativePlayerPlugin/NianNativePlayerPlugin.swift`). **Por quê:** com Web Audio (necessário para o
+  ganho LUFS no iOS) o iOS suspende o AudioContext quando o app sai da tela — a música "continuava tocando" muda e
+  adiantava. **A fila também fica no nativo:** em segundo plano o iOS congela o JavaScript do WebView, então o
+  PlayerContext não consegue trocar de música; o JS manda as próximas 80 (`setUpcoming`), o Swift avança sozinho
+  (fim da música, próximo/anterior da tela de bloqueio), pula os cortes, aplica o volume por faixa (ganho LUFS ×
+  volume do app, máx. 1) e avisa o JS (`advanced` → `nativeadvance` → `adoptNativeTrack` aponta a fila para a
+  música atual). Tela de bloqueio/Central de Controle por MPNowPlayingInfoCenter + MPRemoteCommandCenter (a Media
+  Session do WebView fica desligada). Ponte JS: `mobile/src/platform/nativeAudio.js` (imita um HTMLAudioElement).
+  Usado só se `Capacitor.isPluginAvailable('NianNativePlayer')`. **Teste no navegador:** `localStorage.nianNativeWeb
+  = '1'` liga o mesmo caminho com `plugins/nian-native-player/web.js` (imita o Swift com `<audio>`; `__nianNative.advance()`
+  simula o "próximo" da tela de bloqueio).
 - **`mobile/src/platform/`** — implementa `window.electron` no celular: `storage.js` (tabelas JSON em
   `Library/nianplay/`, mesmo modelo do db.js, flush ao ir para segundo plano), `api.js` (library/playlists/settings/
   player/lyrics com o mesmo comportamento dos handlers do desktop), `rules.js` (nomes únicos de playlist e
@@ -193,13 +208,15 @@ Interface **no estilo do Spotify mobile** (pedido do usuário), com as cores e b
 - **Nuvem: só "Baixar da nuvem".** O "Enviar para nuvem" do desktop APAGA e regrava tudo — de um celular com parte
   das músicas destruiria as playlists do PC. Login só por e-mail/senha (popup do Google não funciona no WKWebView).
 - **Fora do mobile (exigem Node/binários):** downloads (yt-dlp), medição LUFS (os ganhos vêm da nuvem), Spotify,
-  export para o YouTube, comunidade, edição de grupos (a ordem dos grupos é respeitada ao tocar).
+  export para o YouTube, comunidade. **Grupos de sequência** existem no celular desde a 0.1.2 (pastas na playlist,
+  tocar o grupo, criar/excluir, adicionar/reordenar faixas pelo menu).
 - **Interface (`mobile/src/ui/`):** abas Início / Buscar / Sua Biblioteca (pilha de páginas por aba; tocar na aba
   ativa volta ao início); conta pelo avatar (`screens/Account.jsx`); `screens/Collection.jsx` = playlist, "Todas as
   músicas" e artista (degradê da cor da capa, play redondo, aleatório, cabeçalho que encolhe); `MiniPlayer.jsx`
   (flutuante, deslizar troca de música); `NowPlaying.jsx` (fila, letra, puxar para baixo fecha); `tracks.jsx`
   (linha + menu por "⋯"/toque longo); `playContext.js` ("Tocando da playlist…" e "Tocadas recentemente").
-  Controles da tela de bloqueio via Media Session (App.jsx).
+  Deslizar uma música para a direita = "Adicionar à fila" (Spotify; `useAddToQueue` em App.jsx, depois das que já
+  foram adicionadas). Controles da tela de bloqueio: player nativo (acima); Media Session só no navegador.
 - **Ícones:** o projeto usa `lucide-react` 0.344 — nomes antigos (`DownloadCloud`, não `CloudDownload`).
 - **Tailwind do mobile:** `content` com caminhos absolutos (o Tailwind resolve a partir da pasta de execução).
 

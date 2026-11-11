@@ -1,6 +1,6 @@
 {
   "name": "nianplay-mobile",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "NianPlay para iPhone (Capacitor). Reaproveita o player e a sincronizacao de src/renderer.",
@@ -13,7 +13,8 @@
     "@capacitor/core": "8.6.0",
     "@capacitor/filesystem": "8.1.5",
     "@capacitor/ios": "8.6.0",
-    "@capacitor/status-bar": "8.0.4"
+    "@capacitor/status-bar": "8.0.4",
+    "nian-native-player": "file:plugins/nian-native-player"
   },
   "devDependencies": {
     "@capacitor/cli": "8.6.0"

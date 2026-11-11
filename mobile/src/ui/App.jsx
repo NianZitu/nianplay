@@ -51,14 +51,14 @@ function HelpSheet({ onClose }) {
   )
 }
 
-// Lock screen / Control Center controls
+// Lock screen / Control Center controls (web fallback only: the native player handles them in Swift)
 function useMediaSession() {
   const { currentTrack, isPlaying, togglePlay, skipNext, skipPrev, seek } = usePlayer()
   const { duration } = usePlayerProgress()
   const refs = useRef({})
   refs.current = { isPlaying, togglePlay, skipNext, skipPrev, seek, duration }
   useEffect(() => {
-    if (!('mediaSession' in navigator)) return
+    if (!(!window.nianplayPlatform?.nativePlayer && 'mediaSession' in navigator)) return
     const ms = navigator.mediaSession
     const set = (a, fn) => { try { ms.setActionHandler(a, fn) } catch {} }
     set('play', () => { if (!refs.current.isPlaying) refs.current.togglePlay() })
@@ -68,7 +68,7 @@ function useMediaSession() {
     set('seekto', d => { if (refs.current.duration) refs.current.seek(d.seekTime / refs.current.duration) })
   }, [])
   useEffect(() => {
-    if (!('mediaSession' in navigator) || !currentTrack || typeof MediaMetadata === 'undefined') return
+    if (!(!window.nianplayPlatform?.nativePlayer && 'mediaSession' in navigator) || !currentTrack || typeof MediaMetadata === 'undefined') return
     const art = currentTrack.cover_path ? mediaUrl(currentTrack.cover_path) : ''
     navigator.mediaSession.metadata = new MediaMetadata({
       title: currentTrack.title || '', artist: currentTrack.artist || '', album: currentTrack.album || '',
@@ -76,7 +76,7 @@ function useMediaSession() {
     })
   }, [currentTrack?.id, currentTrack?.cover_path])
   useEffect(() => {
-    if ('mediaSession' in navigator) navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused'
+    if (!window.nianplayPlatform?.nativePlayer && 'mediaSession' in navigator) navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused'
   }, [isPlaying])
 }
 

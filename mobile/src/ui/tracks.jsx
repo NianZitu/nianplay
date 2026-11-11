@@ -68,7 +68,7 @@ export function TrackRow({ track, onPlay, onMenu, showCover = true, groupColor =
         <ListEnd size={24} className={`text-surface-900 transition-transform ${dx >= SWIPE_QUEUE ? 'scale-125' : ''}`} />
       </div>
       {groupColor && <span className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r-full z-[1]" style={{ backgroundColor: groupColor }} />}
-      <div {...press} {...touch}
+      <div onContextMenu={press.onContextMenu} {...touch}
         onClick={() => {
           if (swiped.current) { swiped.current = false; return }
           if (!press.wasLongPress()) onPlay(track)
