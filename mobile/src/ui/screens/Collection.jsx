@@ -241,31 +241,6 @@ export default function Collection({ page }) {
             )}
           </div>
 
-          {/* Grupos de sequência panel (desktop): chips; tap = play the group */}
-          {groupsOn && !query.trim() && (
-            <div className="mx-3 mt-4 rounded-xl bg-surface-800/60 border border-white/6 px-3.5 py-3">
-              <div className="flex items-center gap-2 mb-2.5">
-                <Tag size={12} className="text-brand-400" />
-                <span className="text-[13px] font-semibold text-brand-300">Grupos de sequência</span>
-                <span className="text-[11px] text-white/25 ml-auto">toque para tocar</span>
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {groups.map(g => {
-                  const n = tracksByGroup.byGroup.get(g.id)?.length || 0
-                  return (
-                    <button key={g.id} onClick={() => playGroup(g)}
-                      className="inline-flex items-center gap-1.5 h-8 text-[12px] font-medium px-3 rounded-full border active:scale-95 transition-transform"
-                      style={{ borderColor: g.color + '40', backgroundColor: g.color + '15', color: g.color }}>
-                      <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: g.color }} />
-                      {g.name}
-                      <span className="opacity-50 tabular-nums">{n}</span>
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-          )}
-
           {/* Find in list */}
           {page.type !== 'artist' && baseTracks.length > 0 && (
             <div className="relative mx-4 mt-4">

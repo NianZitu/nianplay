@@ -218,8 +218,8 @@ Interface **no estilo do Spotify mobile** (pedido do usuário), com as cores e b
   modal; `MenuList` com destrutivos separados; `VUBars`; `EmptyState`) e classes `m-*` em `mobile.css`
   (`m-row` = bloco de linha como `.playlist-track-row`, `m-chip-primary/ghost`, `m-icon-btn`, `m-label`).
   `screens/Collection.jsx` = playlist, "Todas as músicas" e artista (hero do PlaylistDetail: capa ao lado do rótulo
-  PLAYLIST/título/contagens, "Reproduzir" âmbar + aleatório + ferramentas, painel "Grupos de sequência" com chips que
-  tocam o grupo, faixas numeradas; barra "Voltar" que ganha o título ao rolar); `MiniPlayer.jsx` (bloco do
+  PLAYLIST/título/contagens, "Reproduzir" âmbar + aleatório + ferramentas, faixas numeradas; grupos só como pastas
+  na lista (o painel de chips foi tirado na 0.3.1 a pedido do usuário — com muitos grupos ocupava a tela); barra "Voltar" que ganha o título ao rolar); `MiniPlayer.jsx` (bloco do
   StudioPanel: brilho da capa, VU, play âmbar, progresso âmbar; deslizar troca de música); `NowPlaying.jsx` (layout
   do StudioPanel: título sobre o degradê da capa + VU, abas Fila | Letra na tela; puxar para baixo fecha);
   `tracks.jsx` (linha em bloco + menu por "⋯"/toque longo; `PlaylistArt` = capa própria, senão mosaico 2×2 das capas

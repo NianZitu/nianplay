@@ -6,6 +6,14 @@ Cada entrada: versão, data, o que mudou, por quê, arquivos e status.
 
 ---
 
+## iPhone 0.3.1 — 12/11/2026 — Sem o painel de grupos no topo da playlist
+
+Pedido do usuário (print da playlist ALL FNF, 21 grupos): o painel "Grupos de sequência" com chips ocupava a tela
+inteira. Removido do hero em `Collection.jsx`; os grupos continuam como pastas na lista (abrir/fechar e ▶ para tocar)
+e o botão de etiqueta segue abrindo o menu de grupos.
+
+---
+
 ## iPhone 0.3.0 — 12/11/2026 — Visual do mobile com a blocagem do desktop
 
 **Pedido:** deixar o mobile com a cara da versão de PC (blocagem e organização), sem perder a experiência do Spotify.
