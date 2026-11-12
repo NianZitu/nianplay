@@ -210,11 +210,21 @@ Interface **no estilo do Spotify mobile** (pedido do usuário), com as cores e b
 - **Fora do mobile (exigem Node/binários):** downloads (yt-dlp), medição LUFS (os ganhos vêm da nuvem), Spotify,
   export para o YouTube, comunidade. **Grupos de sequência** existem no celular desde a 0.1.2 (pastas na playlist,
   tocar o grupo, criar/excluir, adicionar/reordenar faixas pelo menu).
-- **Interface (`mobile/src/ui/`):** abas Início / Buscar / Sua Biblioteca (pilha de páginas por aba; tocar na aba
-  ativa volta ao início); conta pelo avatar (`screens/Account.jsx`); `screens/Collection.jsx` = playlist, "Todas as
-  músicas" e artista (degradê da cor da capa, play redondo, aleatório, cabeçalho que encolhe); `MiniPlayer.jsx`
-  (flutuante, deslizar troca de música); `NowPlaying.jsx` (fila, letra, puxar para baixo fecha); `tracks.jsx`
-  (linha + menu por "⋯"/toque longo); `playContext.js` ("Tocando da playlist…" e "Tocadas recentemente").
+- **Interface (`mobile/src/ui/`):** navegação do Spotify, visual do desktop (desde a 0.3.0, seguindo
+  `DESIGN_SYSTEM.md`). Abas Início / Buscar / Biblioteca (pilha de páginas por aba; tocar na aba ativa volta ao
+  início; barra no estilo do NavRail: pílula âmbar + indicador); conta pelo avatar com a moldura do desktop
+  (`screens/Account.jsx`, seções em `.panel` como as Configurações). Base em `common.jsx` (`PageHeader` = cabeçalho
+  fixo com logo, título 26 px font-black e contagens; `SectionTitle` com rótulo em caixa alta; `Sheet` no visual de
+  modal; `MenuList` com destrutivos separados; `VUBars`; `EmptyState`) e classes `m-*` em `mobile.css`
+  (`m-row` = bloco de linha como `.playlist-track-row`, `m-chip-primary/ghost`, `m-icon-btn`, `m-label`).
+  `screens/Collection.jsx` = playlist, "Todas as músicas" e artista (hero do PlaylistDetail: capa ao lado do rótulo
+  PLAYLIST/título/contagens, "Reproduzir" âmbar + aleatório + ferramentas, painel "Grupos de sequência" com chips que
+  tocam o grupo, faixas numeradas; barra "Voltar" que ganha o título ao rolar); `MiniPlayer.jsx` (bloco do
+  StudioPanel: brilho da capa, VU, play âmbar, progresso âmbar; deslizar troca de música); `NowPlaying.jsx` (layout
+  do StudioPanel: título sobre o degradê da capa + VU, abas Fila | Letra na tela; puxar para baixo fecha);
+  `tracks.jsx` (linha em bloco + menu por "⋯"/toque longo; `PlaylistArt` = capa própria, senão mosaico 2×2 das capas
+  das músicas, senão o ícone do desktop); Biblioteca em lista ou grade (galeria do desktop; `settings.mobileLibraryView`);
+  `playContext.js` ("Tocando da playlist…" e "Tocadas recentemente").
   Deslizar uma música para a direita = "Adicionar à fila" (Spotify; `useAddToQueue` em App.jsx, depois das que já
   foram adicionadas). Controles da tela de bloqueio: player nativo (acima); Media Session só no navegador.
 - **Ícones:** o projeto usa `lucide-react` 0.344 — nomes antigos (`DownloadCloud`, não `CloudDownload`).

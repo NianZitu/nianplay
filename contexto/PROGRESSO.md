@@ -6,6 +6,29 @@ Cada entrada: versão, data, o que mudou, por quê, arquivos e status.
 
 ---
 
+## iPhone 0.3.0 — 12/11/2026 — Visual do mobile com a blocagem do desktop
+
+**Pedido:** deixar o mobile com a cara da versão de PC (blocagem e organização), sem perder a experiência do Spotify.
+
+**Mantido do Spotify:** abas com pilha de páginas, mini player flutuante (deslizar troca de música), player em tela
+cheia que fecha puxando para baixo, atalhos 2×3 e prateleiras no Início, deslizar para a fila, menus por toque longo.
+
+**Trazido do desktop (`DESIGN_SYSTEM.md`):** cabeçalhos fixos com logo, título font-black e contagens; rótulos em caixa
+alta (COLEÇÕES, PLAYLIST, A SEGUIR); linhas em blocos com borda fina (faixa ativa em âmbar, números nas playlists, VU
+na capa); cartões de galeria iguais aos de Playlists; hero da playlist com "Reproduzir" âmbar retangular + ferramentas
+e o painel "Grupos de sequência" em chips; player no layout do StudioPanel (título sobre a capa, progresso âmbar fino,
+abas Fila/Letra); folhas no visual de modal; Perfil em painéis como as Configurações (moldura do avatar, toggle e
+volume segmentado). Âmbar = ação principal; teal = funções técnicas (LUFS, nuvem, "Buscar letra"). Novidades:
+mosaico 2×2 nas capas de playlist sem imagem e Biblioteca em lista ou grade.
+
+**Testes (navegador, 375×812, biblioteca de exemplo com capas geradas):** Início, playlist com grupos, mini player,
+player em tela cheia, Biblioteca (lista e grade), Busca (navegar e resultados), menu de faixa e Perfil conferidos por
+captura; corrigidos no teste: botões do hero estourando a largura (aleatório virou ícone), mosaico sem `grid-rows-2`
+na grade, emenda do brilho da capa no player e "dB" em maiúsculas no selo. Deslizar para a fila segue funcionando
+(linha anda e mostra "Adicionada à fila"). Sem erros no console.
+
+---
+
 ## iPhone 0.2.0 — 11/11/2026 — Player nativo: música não para mais ao sair do app
 
 **Relato do usuário (0.1.1):** com o celular desbloqueado, ao desligar a tela ou só sair do app, a música ficava muda

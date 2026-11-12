@@ -1,13 +1,15 @@
-// Buscar — big search bar; "Navegar por tudo" tiles when empty; songs/artists/playlists results.
+// Buscar — Spotify's search flow (big field, browse when empty, songs/artists/playlists results)
+// with the desktop look: input-base field with amber focus, gallery cards, labelled sections.
 import React, { useMemo, useState } from 'react'
-import { Search as SearchIcon, X } from 'lucide-react'
+import { Search as SearchIcon, X, SearchX } from 'lucide-react'
 import { usePlayer } from '../../../../src/renderer/store/PlayerContext'
-import { useLibrary, Cover, isPlayable } from '../common'
+import { useLibrary, Cover, PageHeader, SectionTitle, EmptyState, isPlayable } from '../common'
 import { TrackRow, TrackMenu, PlaylistArt } from '../tracks'
-import { usePlaylists, colorFromString } from '../hooks'
+import { usePlaylists } from '../hooks'
 import { setPlayContext } from '../playContext'
 import { useShell } from '../shell'
 import { Avatar } from './Account'
+import { AllSongsArt, Card } from './Home'
 
 export function artistsOf(library) {
   const map = new Map()
@@ -21,14 +23,6 @@ export function artistsOf(library) {
     map.set(key, a)
   }
   return [...map.values()]
-}
-
-function Tile({ label, color, onClick }) {
-  return (
-    <button onClick={onClick} className="h-24 rounded-lg p-3 text-left overflow-hidden relative active:opacity-80" style={{ backgroundColor: color }}>
-      <span className="text-[15px] font-bold text-white leading-tight line-clamp-3">{label}</span>
-    </button>
-  )
 }
 
 export default function Search() {
@@ -59,89 +53,112 @@ export default function Search() {
     setPlayContext({ type: 'all', name: 'Todas as músicas' })
   }
 
+  const count = results ? results.tracks.length + results.playlists.length + results.artists.length : 0
+
   return (
     <div className="h-full overflow-y-auto overscroll-contain">
-      <div className="sticky top-0 z-10 bg-surface-900 px-4 pb-3" style={{ paddingTop: 'calc(env(safe-area-inset-top) + 12px)' }}>
-        <div className="flex items-center gap-3 mb-4">
-          <button onClick={() => shell.navigate({ type: 'account' })} aria-label="Perfil e ajustes"><Avatar size={34} /></button>
-          <h1 className="text-2xl font-black text-white tracking-tight">Buscar</h1>
+      <PageHeader title="Buscar"
+        subtitle={results ? `${count} resultado${count !== 1 ? 's' : ''} para "${query.trim()}"` : 'Músicas, artistas e playlists'}
+        right={<button onClick={() => shell.navigate({ type: 'account' })} aria-label="Perfil e ajustes"><Avatar size={36} /></button>}>
+        <div className="px-4 pb-3">
+          <div className="relative">
+            <SearchIcon size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
+            <input value={query} onChange={e => setQuery(e.target.value)} placeholder="O que você quer ouvir?"
+              enterKeyHint="search" className="m-input !pl-11 !pr-11" />
+            {query && (
+              <button onClick={() => setQuery('')} aria-label="Limpar busca"
+                className="absolute right-1 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center text-white/35 active:text-white">
+                <X size={18} />
+              </button>
+            )}
+          </div>
         </div>
-        <div className="flex items-center gap-2.5 rounded-md bg-white px-3 h-12">
-          <SearchIcon size={22} className="text-surface-900 shrink-0" />
-          <input value={query} onChange={e => setQuery(e.target.value)} placeholder="O que você quer ouvir?"
-            className="flex-1 bg-transparent text-base font-semibold text-surface-900 placeholder-surface-500 outline-none min-w-0" />
-          {query && <button onClick={() => setQuery('')} className="text-surface-700 p-1"><X size={20} /></button>}
-        </div>
-      </div>
+      </PageHeader>
 
       {!results ? (
-        <div className="px-4">
+        <div className="pb-2">
           {playlists.length > 0 && (
-            <>
-              <h2 className="text-base font-bold text-white mt-2 mb-3">Suas playlists</h2>
-              <div className="grid grid-cols-2 gap-3">
-                <Tile label="Todas as músicas" color="#b45309" onClick={() => shell.navigate({ type: 'all' })} />
-                {playlists.map(p => <Tile key={p.id} label={p.name} color={colorFromString(p.name)} onClick={() => shell.navigate({ type: 'playlist', id: p.id })} />)}
+            <section className="mt-5">
+              <SectionTitle label="Navegar" title="Suas playlists" />
+              <div className="mt-3 px-2 grid grid-cols-2 gap-2">
+                <Card width="100%" onClick={() => shell.navigate({ type: 'all' })}
+                  art={<div className="aspect-square w-full"><AllSongsArt size="100%" /></div>}
+                  title="Todas as músicas" meta={`${library.length.toLocaleString('pt-BR')} faixas`} />
+                {playlists.map(p => (
+                  <Card key={p.id} width="100%" onClick={() => shell.navigate({ type: 'playlist', id: p.id })}
+                    art={<div className="aspect-square w-full"><PlaylistArt playlist={p} size="100%" /></div>}
+                    title={p.name} meta={`${p.trackCount} faixa${p.trackCount !== 1 ? 's' : ''}`} />
+                ))}
               </div>
-            </>
+            </section>
           )}
           {artists.length > 0 && (
-            <>
-              <h2 className="text-base font-bold text-white mt-6 mb-3">Navegar por artista</h2>
-              <div className="grid grid-cols-2 gap-3">
-                {artists.slice(0, 20).map(a => <Tile key={a.name} label={a.name} color={colorFromString(a.name + '!')} onClick={() => shell.navigate({ type: 'artist', name: a.name })} />)}
+            <section className="mt-7">
+              <SectionTitle label="Navegar" title="Artistas" />
+              <div className="mt-3 px-2 grid grid-cols-3 gap-2">
+                {artists.slice(0, 24).map(a => (
+                  <button key={a.name} onClick={() => shell.navigate({ type: 'artist', name: a.name })}
+                    className="flex flex-col items-center gap-2 p-2 rounded-xl active:bg-white/5">
+                    <div className="w-full aspect-square"><Cover track={a.cover} size="100%" rounded="rounded-full" className="shadow-lg shadow-black/40" /></div>
+                    <div className="w-full text-center min-w-0">
+                      <p className="text-[12.5px] font-semibold text-white/85 truncate">{a.name}</p>
+                      <p className="text-[11px] text-white/30">{a.count} faixa{a.count !== 1 ? 's' : ''}</p>
+                    </div>
+                  </button>
+                ))}
               </div>
-            </>
+            </section>
           )}
           {!playlists.length && !artists.length && (
-            <p className="text-center text-sm text-white/45 py-16">Sua biblioteca está vazia. Comece pelo Início.</p>
+            <EmptyState icon={SearchIcon} title="Sua biblioteca está vazia" desc="Comece pelo Início: entre na conta e importe suas músicas." />
           )}
         </div>
       ) : (
-        <div>
+        <div className="pb-2">
           {results.artists.length > 0 && (
-            <Section title="Artistas">
-              {results.artists.map(a => (
-                <button key={a.name} onClick={() => shell.navigate({ type: 'artist', name: a.name })} className="w-full flex items-center gap-3 px-4 py-2 active:bg-white/5 text-left">
-                  <Cover track={a.cover} size={52} rounded="rounded-full" />
-                  <div className="min-w-0"><p className="text-[15px] text-white truncate">{a.name}</p><p className="text-[13px] text-white/50">Artista</p></div>
-                </button>
-              ))}
+            <Section label="Artistas" count={results.artists.length}>
+              <div className="px-2 flex flex-col gap-1">
+                {results.artists.map(a => (
+                  <button key={a.name} onClick={() => shell.navigate({ type: 'artist', name: a.name })} className="m-row flex items-center gap-3 p-2 text-left active:bg-white/[0.07]">
+                    <Cover track={a.cover} size={46} rounded="rounded-full" />
+                    <div className="min-w-0"><p className="text-[15px] font-semibold text-white/90 truncate">{a.name}</p><p className="text-[12px] text-white/35">Artista · {a.count} faixa{a.count !== 1 ? 's' : ''}</p></div>
+                  </button>
+                ))}
+              </div>
             </Section>
           )}
           {results.playlists.length > 0 && (
-            <Section title="Playlists">
-              {results.playlists.map(p => (
-                <button key={p.id} onClick={() => shell.navigate({ type: 'playlist', id: p.id })} className="w-full flex items-center gap-3 px-4 py-2 active:bg-white/5 text-left">
-                  <PlaylistArt playlist={p} size={52} />
-                  <div className="min-w-0"><p className="text-[15px] text-white truncate">{p.name}</p><p className="text-[13px] text-white/50">Playlist · {p.trackCount} músicas</p></div>
-                </button>
-              ))}
+            <Section label="Playlists" count={results.playlists.length}>
+              <div className="px-2 flex flex-col gap-1">
+                {results.playlists.map(p => (
+                  <button key={p.id} onClick={() => shell.navigate({ type: 'playlist', id: p.id })} className="m-row flex items-center gap-3 p-2 text-left active:bg-white/[0.07]">
+                    <PlaylistArt playlist={p} size={46} rounded="rounded-lg" />
+                    <div className="min-w-0"><p className="text-[15px] font-semibold text-white/90 truncate">{p.name}</p><p className="text-[12px] text-white/35">Playlist · {p.trackCount} faixas</p></div>
+                  </button>
+                ))}
+              </div>
             </Section>
           )}
           {results.tracks.length > 0 && (
-            <Section title="Músicas">
+            <Section label="Músicas" count={results.tracks.length}>
               {results.tracks.map(t => <TrackRow key={t.id} track={t} onPlay={playFromResults} onMenu={setMenuTrack} />)}
             </Section>
           )}
-          {!results.tracks.length && !results.playlists.length && !results.artists.length && (
-            <div className="text-center px-8 py-16">
-              <p className="text-lg font-bold text-white">Nenhum resultado para "{query}"</p>
-              <p className="text-sm text-white/50 mt-2">Confira a ortografia ou tente outras palavras.</p>
-            </div>
+          {!count && (
+            <EmptyState icon={SearchX} title={`Nenhum resultado para "${query.trim()}"`} desc="Confira a ortografia ou tente outras palavras." />
           )}
         </div>
       )}
-      <div style={{ height: 'calc(env(safe-area-inset-bottom) + 160px)' }} />
+      <div style={{ height: 'calc(env(safe-area-inset-bottom) + 170px)' }} />
       {menuTrack && <TrackMenu track={menuTrack} onClose={() => setMenuTrack(null)} />}
     </div>
   )
 }
 
-function Section({ title, children }) {
+function Section({ label, count, children }) {
   return (
-    <section className="mt-3">
-      <h2 className="px-4 text-base font-bold text-white mb-1">{title}</h2>
+    <section className="mt-4">
+      <p className="m-label px-4 pb-2">{label} <span className="text-white/20">· {count}</span></p>
       {children}
     </section>
   )

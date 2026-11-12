@@ -1,4 +1,4 @@
-// iPhone app shell — Spotify-style navigation: 3 tabs (Início, Buscar, Sua Biblioteca), each with
+// iPhone app shell — Spotify-style navigation: 3 tabs (Início, Buscar, Biblioteca), each with
 // its own page stack; floating mini player; full-screen player; account opened from the avatar.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
@@ -30,20 +30,24 @@ function summaryText(s) {
 
 function HelpSheet({ onClose }) {
   const Step = ({ n, children }) => (
-    <div className="flex gap-3"><span className="w-6 h-6 rounded-full bg-brand-500 text-surface-900 text-xs font-bold flex items-center justify-center shrink-0">{n}</span><p className="text-sm text-white/75 leading-relaxed">{children}</p></div>
+    <div className="flex gap-3"><span className="w-6 h-6 rounded-lg bg-brand-600/20 border border-brand-500/25 text-brand-300 text-xs font-bold flex items-center justify-center shrink-0 tabular-nums">{n}</span><p className="text-sm text-white/65 leading-relaxed">{children}</p></div>
   )
   return (
     <Sheet title="Colocar músicas no iPhone" onClose={onClose} tall>
-      <div className="px-5 pb-6 flex flex-col gap-4">
-        <p className="text-sm font-bold text-white">Pelo computador (Windows)</p>
+      <div className="px-3 pt-3 pb-6 flex flex-col gap-3">
+        <div className="panel p-4 flex flex-col gap-3.5">
+        <p className="m-label">Pelo computador (Windows)</p>
         <Step n={1}>Conecte o iPhone no PC e abra o app <b>Dispositivos Apple</b> (ou o iTunes).</Step>
         <Step n={2}>Entre no iPhone → <b>Arquivos</b> → <b>NianPlay</b>.</Step>
         <Step n={3}>Arraste a sua pasta de músicas (MP3) para lá.</Step>
         <Step n={4}>Abra o NianPlay: as músicas entram sozinhas na biblioteca e são ligadas às playlists que vieram da nuvem.</Step>
-        <p className="text-sm font-bold text-white pt-2">Pelo próprio iPhone</p>
+        </div>
+        <div className="panel p-4 flex flex-col gap-3.5">
+        <p className="m-label">Pelo próprio iPhone</p>
         <Step n={1}>No app <b>Arquivos</b>, copie as músicas para <b>No meu iPhone › NianPlay</b>, ou</Step>
         <Step n={2}>use <b>Importar do app Arquivos</b> em Todas as músicas para escolher arquivos de qualquer lugar (iCloud Drive, Google Drive…).</Step>
-        <p className="text-xs text-white/40 leading-relaxed pt-2">
+        </div>
+        <p className="text-xs text-white/35 leading-relaxed px-2 pt-1">
           Dica: entre na sua conta e use "Baixar da nuvem" antes — assim cada arquivo é ligado à música certa das suas playlists.
         </p>
       </div>
@@ -163,8 +167,8 @@ function Shell() {
         {/* Bottom: import progress, mini player, tabs */}
         <div className="absolute left-0 right-0 bottom-0 z-30">
           {progress && (
-            <div className="mx-2 mb-1.5 rounded-lg bg-surface-700/95 border border-white/10 px-3 py-2.5 flex items-center gap-3">
-              <Loader2 size={18} className="animate-spin text-brand-400 shrink-0" />
+            <div className="mx-2 mb-1.5 rounded-2xl bg-surface-800/95 backdrop-blur-md border border-white/8 shadow-xl shadow-black/50 px-3 py-2.5 flex items-center gap-3">
+              <Loader2 size={18} className="animate-spin text-accent-400 shrink-0" />
               <div className="min-w-0 flex-1">
                 <p className="text-[13px] text-white">Adicionando músicas{progress.total ? ` ${Math.min(progress.done + 1, progress.total)} de ${progress.total}` : '…'}</p>
                 {progress.name && <p className="text-[11px] text-white/45 truncate">{progress.name}</p>}

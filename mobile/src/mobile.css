@@ -1,7 +1,7 @@
 /* Desktop base first (Tailwind directives, colors, animations), then the phone-specific rules */
 @import '../../src/renderer/styles/globals.css';
 
-/* iPhone app — on top of the desktop's globals.css (colors, animations) */
+/* iPhone app — on top of the desktop's globals.css (colors, animations, .card/.panel/.badge…) */
 html, body, #root { height: 100%; overscroll-behavior: none; }
 body {
   -webkit-tap-highlight-color: transparent;
@@ -16,19 +16,52 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 *::-webkit-scrollbar { display: none; }
 
 @layer components {
-  /* 16px+ font: iOS zooms into smaller inputs */
+  /* Same language as the desktop (DESIGN_SYSTEM.md): warm charcoal, thin borders, rounded-xl,
+     amber only for the main action. Sizes are touch-sized (44px+), and inputs use 16px text
+     (iOS zooms into smaller ones). */
   .m-input {
-    @apply w-full h-12 rounded-lg bg-white/10 border border-white/10 px-4 text-base text-white
-           placeholder-white/40 outline-none focus:border-brand-500/70;
+    @apply w-full h-12 rounded-xl bg-surface-600 border border-white/8 px-4 text-base text-white/90
+           placeholder-white/25 outline-none focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/20
+           transition-colors;
   }
   .m-btn-primary {
-    @apply w-full h-12 rounded-full bg-brand-500 text-surface-900 font-bold text-base
-           active:scale-[0.98] transition-transform disabled:opacity-40;
+    @apply w-full h-12 rounded-xl bg-brand-600 text-white font-semibold text-[15px] shadow-md shadow-black/30
+           active:scale-[0.98] active:bg-brand-500 transition-transform disabled:opacity-40
+           flex items-center justify-center gap-2;
   }
   .m-btn-ghost {
-    @apply w-full h-12 rounded-full border border-white/30 text-white font-bold text-base active:bg-white/10;
+    @apply w-full h-12 rounded-xl bg-surface-600 border border-white/8 text-white/80 font-medium text-[15px]
+           active:bg-surface-500 transition-colors flex items-center justify-center gap-2;
   }
   .m-btn-danger {
-    @apply w-full h-12 rounded-full bg-red-500 text-white font-bold text-base active:scale-[0.98] transition-transform;
+    @apply w-full h-12 rounded-xl bg-red-600/20 border border-red-500/25 text-red-300 font-semibold text-[15px]
+           active:bg-red-600/35 transition-colors flex items-center justify-center gap-2;
+  }
+
+  /* Small header actions (desktop btn-ghost / btn-primary, compact) */
+  .m-chip-primary {
+    @apply h-10 px-4 rounded-xl bg-brand-600 text-white text-sm font-semibold shadow-md shadow-black/30
+           flex items-center gap-2 active:scale-95 active:bg-brand-500 transition-transform disabled:opacity-40;
+  }
+  .m-chip-ghost {
+    @apply h-10 px-3.5 rounded-xl bg-white/[0.04] border border-white/8 text-white/70 text-sm font-medium
+           flex items-center gap-2 active:bg-white/10 transition-colors disabled:opacity-35;
+  }
+  .m-icon-btn {
+    @apply w-10 h-10 rounded-xl flex items-center justify-center text-white/45 active:bg-white/8
+           active:text-white transition-colors disabled:opacity-30;
+  }
+
+  /* A row block (the desktop's .playlist-track-row) */
+  .m-row {
+    @apply bg-white/[0.025] border border-white/[0.05] rounded-xl;
+  }
+  .m-row-active {
+    @apply bg-brand-600/20 border border-brand-400/20 rounded-xl shadow-sm shadow-black/15;
+  }
+
+  /* Equipment-style label (uppercase, wide tracking) */
+  .m-label {
+    @apply text-[10px] uppercase tracking-[0.15em] font-bold text-white/30;
   }
 }
