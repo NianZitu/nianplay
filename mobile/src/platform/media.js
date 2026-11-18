@@ -12,7 +12,7 @@
 
 import { Filesystem, Directory } from '@capacitor/filesystem'
 import { db } from './storage'
-import { LIB, DOCS, isNative, mediaUrl, registerWebBlob, libDirectory, docsDirectory } from './paths'
+import { LIB, DOCS, isNative, mediaUrl, registerWebBlob, libDirectory, docsDirectory, splitStored, storedFromAbsolute } from './paths'
 import { parseId3, id3TagSize } from './id3'
 import { findTrackMatch, uuid } from './rules'
 import { notifyLibraryChanged } from './api'
@@ -272,9 +272,21 @@ export async function scanDocuments(onProgress) {
 // The link is saved in yt_url either way (like the desktop's linkFilesToLibrary).
 const cleanArtist = a => (a || '').replace(/\s+-\s+Topic$/i, '').trim()
 
-export async function importDownloaded({ filePath, url, trackId = null }) {
+// meta (iPhone, m4a files): { title, artist, coverPath } sent by the plugin — the ID3 reader only
+// understands mp3, so the tags and the cover come from there.
+export async function importDownloaded({ filePath, url, trackId = null, meta = null }) {
   const media = mediaUrl(filePath)
-  const tags = extOf(filePath) === '.mp3' ? await readTags(media) : null
+  let tags = extOf(filePath) === '.mp3' ? await readTags(media) : null
+  if (!tags && meta && (meta.title || meta.artist)) tags = { title: meta.title || '', artist: meta.artist || '', album: '' }
+  const coverStored = meta?.coverPath ? storedFromAbsolute(meta.coverPath) : null
+  if (tags && !tags.picture && coverStored) {
+    try {
+      const res = await fetch(mediaUrl(coverStored))
+      if (res.ok) tags.picture = { data: new Uint8Array(await res.arrayBuffer()), mime: 'image/jpeg' }
+    } catch {}
+    const s = splitStored(coverStored)
+    if (s && isNative()) Filesystem.deleteFile({ path: s.path, directory: s.directory }).catch(() => {})
+  }
   if (tags?.artist) tags.artist = cleanArtist(tags.artist)
   const duration = await readDuration(media)
   const link = canonicalUrl(url || '')

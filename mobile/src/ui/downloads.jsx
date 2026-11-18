@@ -4,10 +4,10 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { Download, Check, X, RotateCcw, Loader2, ListMusic, Youtube, RefreshCw, ChevronLeft, Trash2, AlertCircle, Link2 } from 'lucide-react'
 import {
   getJobs, subscribeJobs, startDownload, cancelDownload, retryDownload, clearFinished, activeCount,
-  ytdlpStatus, updateYtdlp, youtubeAvailable,
+  ytdlpStatus, updateYtdlp, youtubeAvailable, playlistDownloads,
 } from '../platform/youtube'
 import { urlKey } from '../../../src/renderer/utils/mediaUrl'
-import { EmptyState, formatTime, useLibrary, isPlayable } from './common'
+import { EmptyState, formatTime, useLibrary, isPlayable, ANDROID } from './common'
 import { useShell } from './shell'
 
 export const YT_ENABLED = youtubeAvailable()
@@ -48,7 +48,7 @@ function Ring({ percent = 0, size = 30 }) {
 }
 
 /** Download button for one YouTube link: ⬇ → progress ring → ✓ (already in the library). */
-export function DownloadButton({ url, title, trackId = null, onStarted }) {
+export function DownloadButton({ url, title, artist = '', trackId = null, onStarted }) {
   const shell = useShell()
   const jobs = useDownloadJobs()
   const byUrl = useLibraryByUrl()
@@ -72,7 +72,7 @@ export function DownloadButton({ url, title, trackId = null, onStarted }) {
   return (
     <button onClick={async e => {
         e.stopPropagation()
-        await startDownload({ url, title, trackId })
+        await startDownload({ url, title, artist, trackId })
         onStarted?.()
         shell.toast(`Baixando "${title || 'música'}"`)
       }}
@@ -96,7 +96,7 @@ export function YoutubeRow({ item }) {
         <p className="text-[14px] font-medium text-white/90 leading-snug line-clamp-2">{item.title}</p>
         <p className="text-[12px] text-white/35 truncate mt-0.5">{item.channel}</p>
       </div>
-      <DownloadButton url={item.url} title={item.title} />
+      <DownloadButton url={item.url} title={item.title} artist={item.channel} />
     </div>
   )
 }
@@ -117,9 +117,12 @@ export function LinkCard({ url, isPlaylist }) {
         <p className="m-label !text-accent-400/80">Link do YouTube</p>
       </div>
       <p className="text-[13px] text-white/50 break-all line-clamp-2">{url}</p>
+      {isPlaylist && !hasVideo && !playlistDownloads() && (
+        <p className="text-[12.5px] text-amber-200/80 leading-relaxed">No iPhone dá para baixar uma música por vez. Abra um vídeo da playlist e cole o link dele.</p>
+      )}
       <div className="flex gap-2">
         {hasVideo && <button onClick={() => go(false)} className="m-btn-primary"><Download size={17} /> Baixar a música</button>}
-        {isPlaylist && <button onClick={() => go(true)} className={hasVideo ? 'm-btn-ghost' : 'm-btn-primary'}><ListMusic size={17} /> {hasVideo ? 'Playlist inteira' : 'Baixar a playlist'}</button>}
+        {isPlaylist && playlistDownloads() && <button onClick={() => go(true)} className={hasVideo ? 'm-btn-ghost' : 'm-btn-primary'}><ListMusic size={17} /> {hasVideo ? 'Playlist inteira' : 'Baixar a playlist'}</button>}
       </div>
     </div>
   )
@@ -191,18 +194,22 @@ function YtdlpCard() {
     <div className="mx-3 mt-4 panel p-4 flex flex-col gap-3">
       <div className="flex items-center gap-2">
         <RefreshCw size={14} className="text-accent-400" />
-        <h2 className="text-sm font-bold text-white/85 flex-1">yt-dlp</h2>
+        <h2 className="text-sm font-bold text-white/85 flex-1">{ANDROID ? 'yt-dlp' : 'Downloads no iPhone'}</h2>
         <span className={info?.ready ? 'badge-accent !normal-case' : 'badge-muted !normal-case'}>
           {info == null ? 'verificando…' : info.ready ? (info.version || 'pronto') : 'indisponível'}
         </span>
       </div>
       <p className="text-[12.5px] text-white/35 leading-relaxed">
-        O programa que baixa do YouTube roda no próprio celular. Se os downloads começarem a falhar, atualize — o YouTube muda com frequência.
+        {ANDROID
+          ? 'O programa que baixa do YouTube roda no próprio celular. Se os downloads começarem a falhar, atualize — o YouTube muda com frequência.'
+          : 'As músicas são baixadas em M4A (AAC), com capa e nome. Se os downloads começarem a falhar, o YouTube mudou algo: a correção vem numa versão nova do app.'}
       </p>
       {info?.error && <p className="text-[12px] text-red-300/80">{info.error}</p>}
-      <button onClick={update} disabled={busy} className="m-btn-ghost">
-        {busy ? <Loader2 size={17} className="animate-spin" /> : <RefreshCw size={16} />} Atualizar o yt-dlp
-      </button>
+      {ANDROID && (
+        <button onClick={update} disabled={busy} className="m-btn-ghost">
+          {busy ? <Loader2 size={17} className="animate-spin" /> : <RefreshCw size={16} />} Atualizar o yt-dlp
+        </button>
+      )}
     </div>
   )
 }

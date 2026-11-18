@@ -239,7 +239,7 @@ export default function Account() {
 
       {YT_ENABLED && (
         <Section icon={Download} title="YouTube" color="text-accent-400">
-          <Row icon={Download} accent label="Downloads" sub="Fila de downloads e atualização do yt-dlp. Para baixar, use Buscar → YouTube ou o botão nas playlists." onPress={() => shell.navigate({ type: 'downloads' })} />
+          <Row icon={Download} accent label="Downloads" sub={ANDROID ? 'Fila de downloads e atualização do yt-dlp. Para baixar, use Buscar → YouTube ou o botão nas playlists.' : 'Fila de downloads. Para baixar, use Buscar → YouTube ou o botão nas playlists.'} onPress={() => shell.navigate({ type: 'downloads' })} />
         </Section>
       )}
 

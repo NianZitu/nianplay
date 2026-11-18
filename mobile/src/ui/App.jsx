@@ -63,6 +63,11 @@ function HelpSheet({ onClose }) {
       ) : (
       <div className="px-3 pt-3 pb-6 flex flex-col gap-3">
         <div className="panel p-4 flex flex-col gap-3.5">
+        <p className="m-label">Do YouTube</p>
+        <Step n={1}>Na aba <b>Buscar</b>, toque em <b>YouTube</b>, procure a música (ou cole o link do vídeo) e toque em baixar.</Step>
+        <Step n={2}>Nas playlists vindas da nuvem, use <b>Baixar do YouTube</b> para trazer as músicas que faltam.</Step>
+        </div>
+        <div className="panel p-4 flex flex-col gap-3.5">
         <p className="m-label">Pelo computador (Windows)</p>
         <Step n={1}>Conecte o iPhone no PC e abra o app <b>Dispositivos Apple</b> (ou o iTunes).</Step>
         <Step n={2}>Entre no iPhone → <b>Arquivos</b> → <b>NianPlay</b>.</Step>

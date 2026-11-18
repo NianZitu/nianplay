@@ -2,16 +2,21 @@
   "name": "nian-youtube",
   "version": "1.0.0",
   "private": true,
-  "description": "NianPlay: YouTube search and audio downloads on Android, with yt-dlp running on the phone (youtubedl-android: Python + yt-dlp + ffmpeg + QuickJS).",
+  "description": "NianPlay: YouTube search and audio downloads on the phone. Android: yt-dlp (youtubedl-android: Python + yt-dlp + ffmpeg + QuickJS). iOS: YouTubeKit (iOS apps cannot run yt-dlp).",
   "main": "index.js",
   "type": "module",
   "files": [
     "index.js",
     "web.js",
     "android/src",
-    "android/build.gradle"
+    "android/build.gradle",
+    "ios/Sources",
+    "Package.swift"
   ],
   "capacitor": {
+    "ios": {
+      "src": "ios"
+    },
     "android": {
       "src": "android"
     }

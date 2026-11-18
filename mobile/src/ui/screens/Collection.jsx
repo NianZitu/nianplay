@@ -165,7 +165,7 @@ export default function Collection({ page }) {
   // Android: songs without a file here that have a YouTube link can be downloaded right away
   const downloadable = YT_ENABLED ? baseTracks.filter(t => !isPlayable(t) && youtubeVideoId(t.yt_url)) : []
   async function downloadMissing() {
-    for (const t of downloadable) await startDownload({ url: t.yt_url, title: t.title, trackId: t.id })
+    for (const t of downloadable) await startDownload({ url: t.yt_url, title: t.title, artist: t.artist, trackId: t.id })
     shell.toast(`${downloadable.length} música${downloadable.length !== 1 ? 's' : ''} na fila de download`)
   }
   const eyebrow = page.type === 'playlist' ? 'Playlist' : page.type === 'artist' ? 'Artista' : 'Biblioteca'

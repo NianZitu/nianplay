@@ -211,7 +211,7 @@ export function TrackMenu({ track, context = {}, onClose, onChanged }) {
         group && posInGroup > 0 && { label: 'Subir no grupo', icon: ArrowUp, onPress: () => moveInGroup(-1) },
         group && posInGroup >= 0 && posInGroup < groupTracks.length - 1 && { label: 'Descer no grupo', icon: ArrowDown, onPress: () => moveInGroup(1) },
         YT_ENABLED && !playable && youtubeVideoId(track.yt_url) && { label: 'Baixar do YouTube', icon: Download, onPress: async () => {
-          await startDownload({ url: track.yt_url, title: track.title, trackId: track.id })
+          await startDownload({ url: track.yt_url, title: track.title, artist: track.artist, trackId: track.id })
           shell.toast(`Baixando "${track.title}"`)
         } },
         track.artist && { label: 'Ver artista', icon: User, onPress: () => shell.navigate({ type: 'artist', name: track.artist }) },

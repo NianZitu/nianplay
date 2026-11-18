@@ -13,6 +13,8 @@ import { importDownloaded } from './media'
 import { canonicalUrl, urlKey, isPlaylistUrl } from '../../../src/renderer/utils/mediaUrl'
 
 export const youtubeAvailable = () => Capacitor.isPluginAvailable('NianYoutube')
+// Whole YouTube playlists: yt-dlp (Android) only
+export const playlistDownloads = () => Capacitor.getPlatform() !== 'ios'
 export { isPlaylistUrl }
 
 const YT_URL = /^(https?:\/\/)?((www|m|music)\.)?(youtube\.com|youtu\.be)\//i
@@ -63,7 +65,8 @@ function listen() {
       try {
         // Only the first file of a single-song job goes onto the track it was requested for
         const forTrack = job.trackId && !job.playlist && job.files.length === 0 ? job.trackId : null
-        const { result, track } = await importDownloaded({ filePath, url: e.url, trackId: forTrack })
+        const meta = e.title || e.artist || e.cover ? { title: e.title, artist: e.artist, coverPath: e.cover } : null
+        const { result, track } = await importDownloaded({ filePath, url: e.url, trackId: forTrack, meta })
         const title = track?.title || filePath.replace(/^.*\//, '').replace(/\.[^.]+$/, '')
         const fresh = jobs.find(j => j.id === e.id)
         patch(e.id, { files: [...(fresh?.files || []), { title, result }] })
@@ -86,7 +89,8 @@ function listen() {
 // ── API ──────────────────────────────────────────────────────────────────────
 const newId = () => `dl-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 
-export async function startDownload({ url, title = '', trackId = null, playlist = null }) {
+// title/artist: what the app already knows about the song (the iPhone plugin uses them as tags)
+export async function startDownload({ url, title = '', artist = '', trackId = null, playlist = null }) {
   const raw = (url || '').trim()
   if (!raw) throw new Error('Link vazio')
   // A whole playlist keeps its list= link (canonicalUrl would reduce it to the single video)
@@ -98,14 +102,14 @@ export async function startDownload({ url, title = '', trackId = null, playlist 
   const running = jobs.find(j => (j.status === 'queued' || j.status === 'downloading') && urlKey(j.url) === key)
   if (running) return running
   const job = {
-    id: newId(), url: link, title, trackId,
+    id: newId(), url: link, title, artist, trackId,
     playlist: wholeList,
     status: 'queued', percent: 0, eta: null, error: null, files: [], createdAt: Date.now(),
   }
   jobs = [job, ...jobs]
   publish()
   try {
-    await NianYoutube.download({ id: job.id, url: job.url, playlist: job.playlist })
+    await NianYoutube.download({ id: job.id, url: job.url, playlist: job.playlist, title, artist })
   } catch (err) {
     patch(job.id, { status: 'error', error: err?.message || String(err) })
   }
@@ -122,7 +126,7 @@ export function retryDownload(id) {
   if (!job) return
   jobs = jobs.filter(j => j.id !== id)
   publish()
-  return startDownload({ url: job.url, title: job.title, trackId: job.trackId, playlist: job.playlist })
+  return startDownload({ url: job.url, title: job.title, artist: job.artist, trackId: job.trackId, playlist: job.playlist })
 }
 
 export function clearFinished() {
