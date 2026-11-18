@@ -6,6 +6,13 @@ Cada entrada: versão, data, o que mudou, por quê, arquivos e status.
 
 ---
 
+## Mobile 0.5.1 — 18/11/2026 — Comunidade também no iPhone
+
+Pedido do usuário (tinha esquecido de citar). A aba Comunidade deixou de ser só do Android (`TABS` em `MiniPlayer.jsx`);
+o resto já era comum às duas plataformas.
+
+---
+
 ## Mobile 0.5.0 — 18/11/2026 — Download do YouTube também no iPhone
 
 Pedido: baixar do YouTube no iPhone (opção 1 proposta: plugin próprio com YouTubeKit). O iOS proíbe executar o yt-dlp,

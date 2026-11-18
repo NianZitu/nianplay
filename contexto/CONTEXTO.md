@@ -259,7 +259,7 @@ Novidade só do Android: **baixar músicas do YouTube no próprio celular**.
   título/artista → faixa nova, sempre gravando `yt_url`. UI em `ui/downloads.jsx`: aba Buscar → YouTube (busca ou
   link de vídeo/playlist), tela Downloads (fila, cancelar, tentar de novo, "Atualizar o yt-dlp"), "Baixar N do
   YouTube" no hero da playlist e "Baixar do YouTube" no menu da música sem arquivo.
-- **Comunidade (aba só no Android, desde a 0.4.1):** `ui/screens/Community.jsx` lê `communityPlaylists` no Firestore
+- **Comunidade (aba no Android desde a 0.4.1 e no iPhone desde a 0.5.1):** `ui/screens/Community.jsx` lê `communityPlaylists` no Firestore
   (mesma coleção do `CommunityPage` do desktop): galeria 2 colunas com busca, prévia da playlist (faixas, grupos, criador)
   e "Adicionar à biblioteca" → `playlists.importCommunity` em `platform/api.js` (cópia de `importPlaylistData` do
   desktop: reaproveita músicas por link/título+artista, cria as outras sem arquivo, recria os grupos, nome repetido vira

@@ -4,7 +4,7 @@
 import React, { useRef, useState } from 'react'
 import { Play, Pause, Home, Search, Library, Users } from 'lucide-react'
 import { usePlayer, usePlayerProgress } from '../../../src/renderer/store/PlayerContext'
-import { Cover, VUBars, trackArt, ANDROID } from './common'
+import { Cover, VUBars, trackArt } from './common'
 
 function Progress() {
   const { progress } = usePlayerProgress()
@@ -63,11 +63,11 @@ export function MiniPlayer({ onOpen }) {
   )
 }
 
-// Comunidade (desktop page) is an Android tab
+// Comunidade = the desktop's Community page (iPhone and Android)
 const TABS = [
   { id: 'home', label: 'Início', icon: Home },
   { id: 'search', label: 'Buscar', icon: Search },
-  ANDROID && { id: 'community', label: 'Comunidade', icon: Users },
+  { id: 'community', label: 'Comunidade', icon: Users },
   { id: 'library', label: 'Biblioteca', icon: Library },
 ].filter(Boolean)
 

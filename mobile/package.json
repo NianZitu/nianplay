@@ -1,6 +1,6 @@
 {
   "name": "nianplay-mobile",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "private": true,
   "type": "module",
   "description": "NianPlay para iPhone e Android (Capacitor). Reaproveita o player e a sincronizacao de src/renderer.",
