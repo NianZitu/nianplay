@@ -12,7 +12,8 @@ export function mediaUrl(p) {
   let local = String(p)
   let query = ''
   if (/^file:/i.test(local)) {
-    local = local.replace(/^file:\/\/\/?/i, '')
+    local = local.replace(/^file:\/\//i, '')
+    if (/^\/[A-Za-z]:/.test(local)) local = local.slice(1)   // file:///C:/… → C:/… (Linux keeps its leading /)
     // "file://C:\a\b.jpg" (saved by the cover pickers) is a raw path; only a real
     // file:///C:/a%20b.jpg URL (old wallpaper src) is percent-encoded and may carry ?v=
     if (!local.includes('\\')) {

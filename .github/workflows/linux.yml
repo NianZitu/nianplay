@@ -1,0 +1,57 @@
+# Builds the NianPlay desktop app for Linux (AppImage, x64) on an Ubuntu runner.
+# It has to be built on Linux: npm installs ffmpeg-static for the machine it runs on.
+#
+# Runs on pushes to the `linux` branch, or manually (Actions → Linux (AppImage) → Run).
+# The AppImage is uploaded as the artifact "NianPlay-linux" — nothing is published to Releases.
+name: Linux (AppImage)
+
+on:
+  push:
+    branches: [linux]
+    paths:
+      - 'src/**'
+      - 'assets/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'vite.config.js'
+      - 'tailwind.config.js'
+      - '.github/workflows/linux.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Build the interface
+        run: npx vite build
+
+      - name: Package (AppImage)
+        run: npx electron-builder --linux --publish never
+
+      - name: Checks
+        run: |
+          ls -la dist-electron
+          APPIMAGE="$(ls dist-electron/*.AppImage | head -1)"
+          test -f "$APPIMAGE"
+          echo "--- bundled ffmpeg (must be a Linux binary)"
+          "$APPIMAGE" --appimage-extract >/dev/null
+          file squashfs-root/resources/app.asar.unpacked/node_modules/ffmpeg-static/ffmpeg
+          echo "### NianPlay para Linux ($(node -p "require('./package.json').version"))" >> "$GITHUB_STEP_SUMMARY"
+          echo "Baixe o artefato **NianPlay-linux**, dê permissão de execução e abra o AppImage." >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NianPlay-linux
+          path: dist-electron/*.AppImage
+          if-no-files-found: error
+          retention-days: 30

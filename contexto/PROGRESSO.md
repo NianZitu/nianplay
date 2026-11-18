@@ -6,6 +6,15 @@ Cada entrada: versão, data, o que mudou, por quê, arquivos e status.
 
 ---
 
+## Linux — 18/11/2026 — Versão do NianPlay para Linux (AppImage)
+
+**Pedido:** "Gere uma versão pra linux também". Branch `linux` (a partir do `main`): alvo AppImage no electron-builder,
+ícone PNG, workflow `linux.yml` (artefato, sem publicar), `file://` de caminhos Linux e cookies do Firefox no Linux.
+O build do Windows (`npm run build`) não muda. Pendente: testar num Linux; decidir se as releases passam a incluir o
+AppImage (aí o release.ps1 precisa subir também o `latest-linux.yml`).
+
+---
+
 ## Bot — 08/11/2026 — Instalação na VPS falhava no `npm ci`
 
 **Problema:** na VPS (Ubuntu 24.04, npm 10.9) o `install.sh` parava em `npm ci`: "Missing: opusscript@0.0.8 from lock

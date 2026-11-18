@@ -159,6 +159,19 @@ Projeto Node separado (CommonJS, Node ≥ 22.12) para rodar numa VPS (Hostinger,
   (cookies.txt de conta secundária). Mensagem amigável já tratada em `ytdlp.js`.
 - Testes: `cd bot && npm test` (grupos vs app, fila do player).
 
+## Versão Linux (branch `linux`, desde 18/11/2026)
+
+O mesmo app Electron empacotado como **AppImage x64** (`build.linux` no package.json; `npm run build:linux`).
+`.github/workflows/linux.yml` compila num Ubuntu (o `ffmpeg-static` precisa ser o binário do Linux, então não dá
+para gerar no Windows) e entrega o artefato `NianPlay-linux` — **não publica** em Releases (`--publish never`).
+- Ícone: `assets/icons/icon.png` (512 px, gerado do "Zunelha Ball.png").
+- Ajustes para Linux: `file:///home/…` mantém a barra inicial (`utils/covers.js`, `main/thumbnails.js`); cookies do
+  Firefox detectados pela pasta de perfil (`~/.mozilla/firefox`, Snap e Flatpak) em `handlers/downloader.js`.
+- yt-dlp no Linux: o `yt-dlp-wrap` baixa o executável genérico, que precisa de **python3** no sistema.
+- Atualização automática: o electron-updater no Linux só funciona com AppImage e precisa de `latest-linux.yml` na
+  release do GitHub — enquanto as releases forem só Windows, ele não acha atualização (o erro é tratado).
+- Ainda não testado num Linux de verdade.
+
 ## Problemas conhecidos / próximos passos
 
 Fases 1–3 de otimização concluídas (ver `PROGRESSO.md`, versões 1.1.22, 1.1.23 e 1.1.24).

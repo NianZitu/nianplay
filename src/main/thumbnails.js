@@ -37,7 +37,8 @@ function thumbDir() {
 function localCoverPath(p) {
   if (!p || typeof p !== 'string') return null
   if (/^(https?|data|blob):/i.test(p)) return null
-  let local = p.replace(/^file:\/\/\/?/i, '')
+  let local = p.replace(/^file:\/\//i, '')
+  if (/^\/[A-Za-z]:/.test(local)) local = local.slice(1)   // file:///C:/… → C:/… (Linux keeps its leading /)
   if (local !== p) { try { local = decodeURIComponent(local) } catch {} }
   // Same file written as "C:/a/b.jpg" or "C:\a\b.jpg" → one thumbnail
   return path.normalize(local)

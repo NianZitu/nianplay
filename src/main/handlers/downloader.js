@@ -221,9 +221,14 @@ function getCookieArgs() {
 
   // Auto-detect: Firefox ONLY — Chrome/Edge 127+ use DPAPI app-bound encryption
   // that yt-dlp cannot decrypt. Never auto-select them to avoid DPAPI errors.
-  const firefoxPaths = [
+  const home = require('os').homedir()
+  const firefoxPaths = process.platform === 'win32' ? [
     'C:\\Program Files\\Mozilla Firefox\\firefox.exe',
     'C:\\Program Files (x86)\\Mozilla Firefox\\firefox.exe',
+  ] : [
+    path.join(home, '.mozilla', 'firefox'),
+    path.join(home, 'snap', 'firefox', 'common', '.mozilla', 'firefox'),
+    path.join(home, '.var', 'app', 'org.mozilla.firefox', '.mozilla', 'firefox'),
   ]
   if (firefoxPaths.some(p => fs.existsSync(p))) {
     console.log('[Downloader] Auto-detected Firefox for cookies')
