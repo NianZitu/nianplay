@@ -20,6 +20,7 @@ import Search from './screens/Search'
 import Library from './screens/Library'
 import Collection from './screens/Collection'
 import Account from './screens/Account'
+import Community, { CommunityPlaylist } from './screens/Community'
 
 function summaryText(s) {
   const parts = []
@@ -132,7 +133,7 @@ function useAddToQueue(showToast) {
 
 function Shell() {
   const [tab, setTab] = useState('home')
-  const [stacks, setStacks] = useState({ home: [], search: [], library: [] })
+  const [stacks, setStacks] = useState({ home: [], search: [], community: [], library: [] })
   const [nowOpen, setNowOpen] = useState(false)
   const [toast, showToast] = useToast()
   const [prompt, setPrompt] = useState(null)
@@ -208,8 +209,9 @@ function Shell() {
   let screen
   if (top?.type === 'account') screen = <Account />
   else if (top?.type === 'downloads') screen = <Downloads />
+  else if (top?.type === 'community') screen = <CommunityPlaylist key={top.id} id={top.id} />
   else if (top) screen = <Collection key={`${top.type}-${top.id || top.name || ''}`} page={top} />
-  else screen = tab === 'home' ? <Home /> : tab === 'search' ? <Search /> : <Library />
+  else screen = tab === 'home' ? <Home /> : tab === 'search' ? <Search /> : tab === 'community' ? <Community /> : <Library />
 
   return (
     <ShellContext.Provider value={shell}>

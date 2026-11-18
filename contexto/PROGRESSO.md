@@ -6,6 +6,19 @@ Cada entrada: versão, data, o que mudou, por quê, arquivos e status.
 
 ---
 
+## Mobile 0.4.1 — 18/11/2026 — Aba Comunidade no Android
+
+Pedido: "inclui a aba de comunidade na versão de android". Quarta aba (Início, Buscar, Comunidade, Biblioteca), só no
+Android: playlists compartilhadas do Firestore (`communityPlaylists`), busca por nome/criador, prévia com faixas e grupos,
+"Adicionar à biblioteca" (porte de `importPlaylistData` do desktop para `platform/api.js`).
+
+**Testado no navegador (interface Android forçada, dados reais do Firestore):** 18 playlists carregadas; prévia de "Fnaf";
+importação: 30 faixas criadas sem arquivo, 6 grupos com as 30 faixas nos grupos certos, 29 com link do YouTube; importar de
+novo reaproveita as 30 e vira "Fnaf (2)"; a playlist importada mostra as pastas dos grupos e "Baixar 29 do YouTube".
+Obs.: a coleção da comunidade tem playlists repetidas (vêm do envio do desktop — não mexido aqui).
+
+---
+
 ## Mobile 0.4.0 — 18/11/2026 — Versão para Android com download do YouTube
 
 **Pedido:** usar a versão do iPhone de base para um app Android, "com a função de baixar as músicas direto do YouTube".

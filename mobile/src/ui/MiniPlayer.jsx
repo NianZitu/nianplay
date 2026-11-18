@@ -2,9 +2,9 @@
 // changes song) with the desktop StudioPanel look: charcoal block, blurred cover glow, VU meter,
 // amber play button and a thin amber progress line.
 import React, { useRef, useState } from 'react'
-import { Play, Pause, Home, Search, Library } from 'lucide-react'
+import { Play, Pause, Home, Search, Library, Users } from 'lucide-react'
 import { usePlayer, usePlayerProgress } from '../../../src/renderer/store/PlayerContext'
-import { Cover, VUBars, trackArt } from './common'
+import { Cover, VUBars, trackArt, ANDROID } from './common'
 
 function Progress() {
   const { progress } = usePlayerProgress()
@@ -63,11 +63,13 @@ export function MiniPlayer({ onOpen }) {
   )
 }
 
+// Comunidade (desktop page) is an Android tab
 const TABS = [
   { id: 'home', label: 'Início', icon: Home },
   { id: 'search', label: 'Buscar', icon: Search },
+  ANDROID && { id: 'community', label: 'Comunidade', icon: Users },
   { id: 'library', label: 'Biblioteca', icon: Library },
-]
+].filter(Boolean)
 
 // Tab bar with the desktop NavRail language: amber pill + indicator on the active tab
 export function TabBar({ tab, onTab }) {

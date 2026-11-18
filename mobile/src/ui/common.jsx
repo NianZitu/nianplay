@@ -5,7 +5,8 @@ import { listCoverSrc, coverSrc } from '../../../src/renderer/utils/covers'
 import { mediaUrl, isAndroid } from '../platform/paths'
 
 // What the texts call this phone
-export const ANDROID = isAndroid()
+// (dev server: localStorage.nianAndroidUi = '1' shows the Android UI in the browser)
+export const ANDROID = isAndroid() || (import.meta.env.DEV && (() => { try { return localStorage.getItem('nianAndroidUi') === '1' } catch { return false } })())
 export const DEVICE = ANDROID ? 'celular' : 'iPhone'
 export const PLATFORM = ANDROID ? 'Android' : 'iPhone'
 export const IMPORT_LABEL = ANDROID ? 'Importar arquivos' : 'Importar do app Arquivos'

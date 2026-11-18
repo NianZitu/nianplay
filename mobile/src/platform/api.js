@@ -233,6 +233,96 @@ const playlists = {
     db.playlists.write(list)
     return p
   },
+
+  // Same as the desktop's playlists:importCommunity (handlers/playlists.js → importPlaylistData):
+  // a local copy of a Comunidade playlist. Songs already in the library are reused (link, then
+  // title + artist); the others become tracks without file (downloadable from YouTube on Android).
+  // A repeated name becomes "Name (2)".
+  importCommunity: async data => {
+    if (!data || !Array.isArray(data.tracks)) return { error: 'Formato não reconhecido' }
+    const fallbackName = 'Playlist da Comunidade'
+    const allTracks = db.tracks.read()
+    const playlist = {
+      id: uuid(),
+      name: uniqueName(db.playlists.read(), data.name || fallbackName),
+      cover_url: data.cover_url || '',
+      groups_enabled: Boolean(data.groups_enabled || (Array.isArray(data.groups) && data.groups.length > 0)),
+      created_at: now(),
+      updated_at: now(),
+    }
+    db.playlists.write([playlist, ...db.playlists.read()])
+
+    const rows = db.playlistTracks.read()
+    const trackIdAt = []
+    let created = 0
+    data.tracks.forEach((imp, i) => {
+      let match = findTrackMatch(allTracks, imp)
+      if (!match) {
+        match = {
+          id: uuid(),
+          title: imp.title || 'Desconhecido',
+          artist: imp.artist || 'Desconhecido',
+          album: imp.album || '',
+          duration: imp.duration || 0,
+          file_path: '',
+          cover_url: /^https?:\/\//.test(imp.cover_url || '') ? imp.cover_url : '',
+          genre: imp.genre || '',
+          year: imp.year || null,
+          gain: imp.gain || 0,
+          cut_segments: normalizeCutSegments(imp.cut_segments),
+          lyrics: imp.lyrics || '',
+          yt_url: canonicalUrl(imp.yt_url),
+          created_at: now(),
+          updated_at: now(),
+        }
+        allTracks.push(match)
+        created++
+      } else {
+        let changed = false
+        if (!match.yt_url && imp.yt_url) { match.yt_url = canonicalUrl(imp.yt_url); changed = true }
+        if (!match.lyrics && imp.lyrics) { match.lyrics = imp.lyrics; changed = true }
+        if (!match.cover_path && !match.cover_url && /^https?:\/\//.test(imp.cover_url || '')) { match.cover_url = imp.cover_url; changed = true }
+        if (!match.gain && imp.gain) { match.gain = imp.gain; changed = true }
+        if ((!match.cut_segments || match.cut_segments.length === 0) && imp.cut_segments?.length) {
+          match.cut_segments = normalizeCutSegments(imp.cut_segments); changed = true
+        }
+        if (changed) match.updated_at = now()
+      }
+      trackIdAt[i] = match.id
+      if (!rows.some(r => r.playlist_id === playlist.id && r.track_id === match.id)) {
+        rows.push({ id: uuid(), playlist_id: playlist.id, track_id: match.id, position: i })
+      }
+    })
+    db.tracks.write(allTracks)
+
+    if (Array.isArray(data.groups) && data.groups.length > 0) {
+      const groups = db.playlistGroups.read()
+      const groupId = {}
+      data.groups.forEach((g, idx) => {
+        const group = { id: uuid(), playlist_id: playlist.id, name: g.name, color: g.color || GROUP_COLORS[idx % GROUP_COLORS.length], created_at: g.created_at || now() }
+        groups.push(group)
+        groupId[g.name] = group.id
+      })
+      db.playlistGroups.write(groups)
+      data.tracks.forEach((imp, i) => {
+        if (!imp.group_name || !(imp.group_name in groupId)) return
+        const row = rows.find(r => r.playlist_id === playlist.id && r.track_id === trackIdAt[i])
+        if (row) { row.group_id = groupId[imp.group_name]; row.group_position = imp.group_position ?? 0 }
+      })
+    }
+    db.playlistTracks.write(rows)
+    notifyLibraryChanged()
+
+    const asked = data.name || fallbackName
+    return {
+      ok: true,
+      playlist,
+      renamedFrom: playlist.name !== asked ? asked : null,
+      trackCount: data.tracks.length,
+      matched: data.tracks.length - created,
+      created,
+    }
+  },
 }
 
 // ── Settings / player session ───────────────────────────────────────────────
