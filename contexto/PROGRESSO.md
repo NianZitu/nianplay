@@ -6,6 +6,19 @@ Cada entrada: versão, data, o que mudou, por quê, arquivos e status.
 
 ---
 
+## Mobile 0.5.0 — 18/11/2026 — Download do YouTube também no iPhone
+
+Pedido: baixar do YouTube no iPhone (opção 1 proposta: plugin próprio com YouTubeKit). O iOS proíbe executar o yt-dlp,
+então o lado iOS do plugin `nian-youtube` foi escrito em Swift com a YouTubeKit 0.4.8 (extração local), com a mesma API
+do Android: busca (endpoint interno do YouTube), download do áudio m4a em pedaços, tags e capa embutidas, fila, cancelar.
+A interface é a mesma do Android (Buscar → YouTube, "Baixar N do YouTube", menu da música, tela Downloads); no iPhone o
+cartão diz que correções vêm em versões novas do app, e link de playlist inteira avisa que é uma música por vez.
+
+**Verificado:** o .ipa compila com o plugin (`NianYoutubePlugin` no packageClassList, YouTubeKit e o bundle de recursos
+dentro do app); Android também compila. **Não testado num iPhone** (extração, velocidade, tags).
+
+---
+
 ## Mobile 0.4.1 — 18/11/2026 — Aba Comunidade no Android
 
 Pedido: "inclui a aba de comunidade na versão de android". Quarta aba (Início, Buscar, Comunidade, Biblioteca), só no

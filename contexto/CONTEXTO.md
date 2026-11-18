@@ -265,6 +265,15 @@ Novidade só do Android: **baixar músicas do YouTube no próprio celular**.
   desktop: reaproveita músicas por link/título+artista, cria as outras sem arquivo, recria os grupos, nome repetido vira
   "Nome (2)"). Depois, a playlist mostra "Baixar N do YouTube". Para ver a interface Android no navegador:
   `localStorage.nianAndroidUi = '1'`.
+- **YouTube no iPhone (desde a 0.5.0):** o iOS não deixa apps rodarem programas como o yt-dlp, então
+  `plugins/nian-youtube/ios` (Swift) usa a **YouTubeKit 0.4.8** (SPM; acha o stream de áudio no aparelho com
+  JavaScriptCore; só o método `.local` — o `.remote` mandaria os vídeos a um servidor de terceiros). Mesma API/eventos
+  do Kotlin. Áudio AAC (m4a) de maior bitrate, baixado em pedaços de 9 MB (Range), regravado como .m4a com título,
+  artista e capa (AVAssetExportSession passthrough) em `Documents/YouTube`. Título/artista vêm do app (resultado da
+  busca, faixa da playlist) ou do oEmbed do YouTube; capa = maior miniatura (i.ytimg.com). O evento `file` traz
+  `title/artist/cover` e `media.importDownloaded({ meta })` usa isso (o leitor de tags só entende mp3). Busca = endpoint
+  interno `youtubei/v1/search` (não oficial, pode quebrar). Sem playlists do YouTube no iPhone (uma música por vez).
+  Quando o YouTube quebrar a extração: atualizar a YouTubeKit no `Package.swift` e gerar um .ipa novo.
 - **Botão Voltar:** `shell.useBackHandler` (folhas e player em tela cheia fecham primeiro) → página anterior →
   Início → minimiza o app.
 - **Teste no navegador:** `plugins/nian-youtube/web.js` imita busca/download (sem gerar arquivo).
