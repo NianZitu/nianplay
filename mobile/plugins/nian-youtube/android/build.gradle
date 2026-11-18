@@ -1,0 +1,55 @@
+// NianPlay YouTube downloads — Android (yt-dlp on the phone through youtubedl-android).
+// The library ships Python + yt-dlp, ffmpeg (audio conversion, cover embedding) and QuickJS
+// (the JavaScript runtime yt-dlp needs for YouTube since 2025.11; the library passes
+// --js-runtimes quickjs:… by itself).
+ext {
+    youtubedlAndroidVersion = '0.18.1'
+}
+
+buildscript {
+    ext.kotlin_version = project.hasProperty("kotlin_version") ? rootProject.ext.kotlin_version : '2.2.20'
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.13.0'
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+    }
+}
+
+apply plugin: 'com.android.library'
+if (project.extensions.findByName('kotlin') == null) {
+    apply plugin: 'kotlin-android'
+}
+
+android {
+    namespace = "com.nianplay.youtube"
+    compileSdk = project.hasProperty('compileSdkVersion') ? rootProject.ext.compileSdkVersion : 36
+    defaultConfig {
+        minSdkVersion project.hasProperty('minSdkVersion') ? rootProject.ext.minSdkVersion : 24
+        targetSdkVersion project.hasProperty('targetSdkVersion') ? rootProject.ext.targetSdkVersion : 36
+    }
+    lintOptions {
+        abortOnError = false
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_21
+        targetCompatibility JavaVersion.VERSION_21
+    }
+}
+
+kotlin {
+    jvmToolchain(21)
+}
+
+repositories {
+    google()
+    mavenCentral()
+}
+
+dependencies {
+    implementation project(':capacitor-android')
+    implementation "io.github.junkfood02.youtubedl-android:library:$youtubedlAndroidVersion"
+    implementation "io.github.junkfood02.youtubedl-android:ffmpeg:$youtubedlAndroidVersion"
+}

@@ -12,10 +12,11 @@
 
 import { Filesystem, Directory } from '@capacitor/filesystem'
 import { db } from './storage'
-import { LIB, DOCS, isNative, mediaUrl, registerWebBlob } from './paths'
+import { LIB, DOCS, isNative, mediaUrl, registerWebBlob, libDirectory, docsDirectory } from './paths'
 import { parseId3, id3TagSize } from './id3'
 import { findTrackMatch, uuid } from './rules'
 import { notifyLibraryChanged } from './api'
+import { canonicalUrl, urlKey } from '../../../src/renderer/utils/mediaUrl'
 
 export const AUDIO_EXT = new Set(['.mp3', '.m4a', '.aac', '.wav', '.flac', '.ogg', '.opus', '.aif', '.aiff', '.caf'])
 const CHUNK = 3 * 1024 * 1024   // multiple of 3 bytes → base64 pieces concatenate cleanly
@@ -66,8 +67,8 @@ function readDuration(url) {
 async function copyIntoApp(file, relPath) {
   for (let pos = 0; pos < file.size || pos === 0; pos += CHUNK) {
     const data = toBase64(new Uint8Array(await file.slice(pos, pos + CHUNK).arrayBuffer()))
-    if (pos === 0) await Filesystem.writeFile({ path: relPath, directory: Directory.LibraryNoCloud, data, recursive: true })
-    else await Filesystem.appendFile({ path: relPath, directory: Directory.LibraryNoCloud, data })
+    if (pos === 0) await Filesystem.writeFile({ path: relPath, directory: libDirectory(), data, recursive: true })
+    else await Filesystem.appendFile({ path: relPath, directory: libDirectory(), data })
     if (file.size === 0) break
   }
 }
@@ -91,7 +92,7 @@ async function saveImage(blob, relPath) {
   const stored = LIB + relPath
   if (!isNative()) { registerWebBlob(stored, blob); return stored }
   const data = toBase64(new Uint8Array(await blob.arrayBuffer()))
-  await Filesystem.writeFile({ path: relPath, directory: Directory.LibraryNoCloud, data, recursive: true })
+  await Filesystem.writeFile({ path: relPath, directory: libDirectory(), data, recursive: true })
   return stored
 }
 
@@ -209,7 +210,7 @@ export async function importFiles(fileList, onProgress) {
 async function listDocuments(dir = '') {
   const out = []
   let res
-  try { res = await Filesystem.readdir({ path: dir, directory: Directory.Documents }) } catch { return out }
+  try { res = await Filesystem.readdir({ path: dir, directory: docsDirectory() }) } catch { return out }
   for (const f of res.files) {
     if (f.name.startsWith('.')) continue
     const rel = dir ? `${dir}/${f.name}` : f.name
@@ -261,4 +262,58 @@ export async function scanDocuments(onProgress) {
   db.settings.write(all)
   notifyLibraryChanged()
   return summary
+}
+
+// ── YouTube downloads (Android) ──────────────────────────────────────────────
+// A file yt-dlp just finished (nian-docs://YouTube/…). It goes to, in this order:
+//   1. the track it was downloaded FOR ("Baixar do YouTube" on a cloud track without file),
+//   2. a track without file that has the same link (playlists synced from the PC),
+//   3. the usual title + artist match / a new track.
+// The link is saved in yt_url either way (like the desktop's linkFilesToLibrary).
+const cleanArtist = a => (a || '').replace(/\s+-\s+Topic$/i, '').trim()
+
+export async function importDownloaded({ filePath, url, trackId = null }) {
+  const media = mediaUrl(filePath)
+  const tags = extOf(filePath) === '.mp3' ? await readTags(media) : null
+  if (tags?.artist) tags.artist = cleanArtist(tags.artist)
+  const duration = await readDuration(media)
+  const link = canonicalUrl(url || '')
+  const key = urlKey(link)
+
+  const tracks = db.tracks.read()
+  let target = trackId ? tracks.find(t => t.id === trackId) : null
+  if (!target && key) target = tracks.find(t => !t.file_path && urlKey(t.yt_url) === key)
+
+  let result
+  if (target) {
+    const covers = target.cover_path ? {} : await saveCovers(tags?.picture, target.id)
+    const fresh = db.tracks.read()
+    const idx = fresh.findIndex(t => t.id === target.id)
+    if (idx === -1) return { result: 'skipped' }
+    fresh[idx] = {
+      ...fresh[idx],
+      file_path: filePath,
+      duration: fresh[idx].duration || duration,
+      yt_url: fresh[idx].yt_url || link,
+      ...covers,
+      updated_at: Date.now(),
+    }
+    db.tracks.write(fresh)
+    result = 'linked'
+  } else {
+    result = await addToLibrary({ filePath, fileName: filePath.replace(/^.*\//, ''), tags, duration, picture: tags?.picture })
+    if (result === 'duplicate') {
+      // Same song already has a file: keep the library as it is, but don't re-scan this file on every start
+      const settings = db.settings.read()
+      settings.ignoredDocs = [...new Set([...(settings.ignoredDocs || []), filePath])]
+      db.settings.write(settings)
+    }
+  }
+  if (link) {
+    const fresh = db.tracks.read()
+    const t = fresh.find(x => x.file_path === filePath)
+    if (t && !t.yt_url) { t.yt_url = link; t.updated_at = Date.now(); db.tracks.write(fresh) }
+  }
+  notifyLibraryChanged()
+  return { result, track: db.tracks.read().find(x => x.file_path === filePath) || null }
 }

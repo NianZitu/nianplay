@@ -16,6 +16,14 @@ import { Filesystem, Directory } from '@capacitor/filesystem'
 export const LIB  = 'nian-lib://'
 export const DOCS = 'nian-docs://'
 export const isNative = () => Capacitor.isNativePlatform()
+export const isAndroid = () => Capacitor.getPlatform() === 'android'
+
+// Where each prefix lives on disk.
+//   iOS:     LIB → Library/NoCloud (private, not backed up)     DOCS → Documents (Arquivos › No meu iPhone)
+//   Android: LIB → files/ (private)                             DOCS → Android/data/com.nianplay.mobile/files
+//            (visible from the PC over USB; also where YouTube downloads land, in YouTube/)
+export const libDirectory  = () => (isAndroid() ? Directory.Data : Directory.LibraryNoCloud)
+export const docsDirectory = () => (isAndroid() ? Directory.External : Directory.Documents)
 
 const bases = { lib: '', docs: '' }
 // Browser dev/testing only: imported files are played from in-memory blob URLs
@@ -24,8 +32,8 @@ const webBlobs = new Map()
 export async function initPaths() {
   if (!isNative()) return
   const [lib, docs] = await Promise.all([
-    Filesystem.getUri({ directory: Directory.LibraryNoCloud, path: '' }),
-    Filesystem.getUri({ directory: Directory.Documents, path: '' }),
+    Filesystem.getUri({ directory: libDirectory(), path: '' }),
+    Filesystem.getUri({ directory: docsDirectory(), path: '' }),
   ])
   bases.lib = lib.uri.replace(/\/+$/, '')
   bases.docs = docs.uri.replace(/\/+$/, '')
@@ -33,8 +41,8 @@ export async function initPaths() {
 
 // "nian-lib://music/a b.mp3" → { directory, path: 'music/a b.mp3' }
 export function splitStored(p) {
-  if (p?.startsWith(LIB))  return { directory: Directory.LibraryNoCloud, path: p.slice(LIB.length), base: 'lib' }
-  if (p?.startsWith(DOCS)) return { directory: Directory.Documents, path: p.slice(DOCS.length), base: 'docs' }
+  if (p?.startsWith(LIB))  return { directory: libDirectory(), path: p.slice(LIB.length), base: 'lib' }
+  if (p?.startsWith(DOCS)) return { directory: docsDirectory(), path: p.slice(DOCS.length), base: 'docs' }
   return null
 }
 
@@ -53,6 +61,21 @@ export function mediaUrl(p) {
   if (p.startsWith(LIB) || p.startsWith(DOCS)) return Capacitor.convertFileSrc(fileUri(p))
   if (p.startsWith('file:')) return Capacitor.convertFileSrc(p)
   return ''   // a desktop path (C:\...) synced from another device: not on this phone
+}
+
+// Absolute file path (from a native plugin) → stored path, when it is inside the app's folders
+export function storedFromAbsolute(absPath) {
+  const plainPath = p => {
+    const s = String(p || '').replace(/^file:\/\//, '')
+    try { return decodeURIComponent(s) } catch { return s }
+  }
+  const file = plainPath(absPath)
+  for (const [base, prefix] of [['docs', DOCS], ['lib', LIB]]) {
+    if (!bases[base]) continue
+    const root = plainPath(bases[base])
+    if (file.startsWith(root + '/')) return prefix + file.slice(root.length + 1)
+  }
+  return null
 }
 
 export function registerWebBlob(storedPath, blob) {

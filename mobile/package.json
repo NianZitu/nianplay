@@ -1,20 +1,22 @@
 {
   "name": "nianplay-mobile",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
-  "description": "NianPlay para iPhone (Capacitor). Reaproveita o player e a sincronizacao de src/renderer.",
+  "description": "NianPlay para iPhone e Android (Capacitor). Reaproveita o player e a sincronizacao de src/renderer.",
   "scripts": {
     "dev": "vite --config vite.config.js",
     "build": "vite build --config vite.config.js"
   },
   "dependencies": {
+    "@capacitor/android": "8.6.0",
     "@capacitor/app": "8.1.2",
     "@capacitor/core": "8.6.0",
     "@capacitor/filesystem": "8.1.5",
     "@capacitor/ios": "8.6.0",
     "@capacitor/status-bar": "8.0.4",
-    "nian-native-player": "file:plugins/nian-native-player"
+    "nian-native-player": "file:plugins/nian-native-player",
+    "nian-youtube": "file:plugins/nian-youtube"
   },
   "devDependencies": {
     "@capacitor/cli": "8.6.0"

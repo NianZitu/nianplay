@@ -1,0 +1,84 @@
+# Builds the NianPlay Android app (mobile/) into a signed .apk on an Ubuntu runner.
+# Signed with the NianPlay key stored in the repository secrets (ANDROID_KEYSTORE_B64,
+# ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS), so every new version installs over the previous one.
+#
+# Runs on pushes to the `mobile` branch that touch the app, or manually (Actions → Android (.apk) → Run).
+# The .apk is uploaded as the artifact "NianPlay-apk". Desktop releases are not affected.
+name: Android (.apk)
+
+on:
+  push:
+    branches: [mobile]
+    paths:
+      - 'mobile/**'
+      - 'src/renderer/**'
+      - 'tailwind.config.js'
+      - '.github/workflows/android.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'   # the root package.json is the desktop app; Electron isn't needed here
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Install dependencies (shared renderer + Capacitor)
+        run: |
+          npm ci --no-audit --no-fund
+          npm ci --no-audit --no-fund --prefix mobile
+
+      - name: Build the web layer
+        run: npx vite build --config mobile/vite.config.js
+
+      - name: Generate the Android project
+        working-directory: mobile
+        run: |
+          npx cap add android
+          chmod +x ci/patch-android.sh
+          ./ci/patch-android.sh "$(node -p "require('./package.json').version")" "${{ github.run_number }}"
+          npx cap sync android
+
+      - name: Build (release, signed)
+        working-directory: mobile/android
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          NIANPLAY_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          NIANPLAY_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          export NIANPLAY_KEYSTORE="$RUNNER_TEMP/nianplay.p12"
+          echo "$KEYSTORE_B64" | base64 -d > "$NIANPLAY_KEYSTORE"
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleRelease
+          rm -f "$NIANPLAY_KEYSTORE"
+
+      - name: Package .apk
+        run: |
+          VERSION="$(node -p "require('./mobile/package.json').version")"
+          APK="$(ls mobile/android/app/build/outputs/apk/release/*.apk | head -1)"
+          mkdir -p out && cp "$APK" "out/NianPlay-${VERSION}.apk"
+          echo "--- checks"
+          BT="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
+          "$BT/apksigner" verify --print-certs "out/NianPlay-${VERSION}.apk" | head -3
+          "$BT/aapt2" dump badging "out/NianPlay-${VERSION}.apk" | grep -E "^package:|native-code|application-label:" || true
+          ls -la out
+          echo "### NianPlay ${VERSION} para Android (build ${{ github.run_number }})" >> "$GITHUB_STEP_SUMMARY"
+          echo "Baixe o artefato **NianPlay-apk** e instale no celular." >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NianPlay-apk
+          path: out/*.apk
+          if-no-files-found: error
+          retention-days: 30
