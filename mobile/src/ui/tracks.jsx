@@ -1,9 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { MoreHorizontal, ListPlus, ListEnd, ListStart, User, Trash2, MinusCircle, Plus, Check, Tag, ArrowUp, ArrowDown, ListMusic } from 'lucide-react'
+import { MoreHorizontal, Download, ListPlus, ListEnd, ListStart, User, Trash2, MinusCircle, Plus, Check, Tag, ArrowUp, ArrowDown, ListMusic } from 'lucide-react'
 import { usePlayer } from '../../../src/renderer/store/PlayerContext'
-import { Cover, Sheet, MenuList, VUBars, formatTime, isPlayable, trackArt } from './common'
+import { Cover, Sheet, MenuList, VUBars, formatTime, isPlayable, trackArt, DEVICE } from './common'
 import { useLongPress, usePlaylists } from './hooks'
 import { useShell } from './shell'
+import { YT_ENABLED, startDownload } from './downloads'
+import { youtubeVideoId } from '../../../src/renderer/utils/mediaUrl'
 
 export const ROW_HEIGHT = 64
 
@@ -83,7 +85,7 @@ export function TrackRow({ track, onPlay, onMenu, showCover = true, groupColor =
           <p className={`text-[15px] font-medium leading-tight truncate ${active ? 'text-brand-300' : 'text-white/90'}`}>{track.title}</p>
           <p className="text-[12.5px] text-white/40 truncate mt-1">
             {track.artist}
-            {!playable && <span className="text-amber-400/70"> · não está neste iPhone</span>}
+            {!playable && <span className="text-amber-400/70"> · não está neste {DEVICE}</span>}
           </p>
         </div>
         <button onClick={e => { e.stopPropagation(); onMenu(track) }} aria-label="Mais opções"
@@ -165,7 +167,7 @@ export function TrackMenu({ track, context = {}, onClose, onChanged }) {
       <Sheet title="Remover da biblioteca" onClose={onClose}>
         <div className="px-5 pt-4 pb-4 flex flex-col gap-3">
           <p className="text-sm text-white/55 leading-relaxed">
-            "{track.title}" sai da biblioteca e das playlists deste iPhone. A nuvem não é alterada.
+            "{track.title}" sai da biblioteca e das playlists deste {DEVICE}. A nuvem não é alterada.
           </p>
           <div className="flex gap-2 pt-1">
             <button className="m-btn-ghost" onClick={onClose}>Cancelar</button>
@@ -208,6 +210,10 @@ export function TrackMenu({ track, context = {}, onClose, onChanged }) {
         context.playlistId && { label: group ? `Grupo: ${group.name}` : 'Adicionar a um grupo', icon: Tag, onPress: () => setChoosingGroup(true), keep: true },
         group && posInGroup > 0 && { label: 'Subir no grupo', icon: ArrowUp, onPress: () => moveInGroup(-1) },
         group && posInGroup >= 0 && posInGroup < groupTracks.length - 1 && { label: 'Descer no grupo', icon: ArrowDown, onPress: () => moveInGroup(1) },
+        YT_ENABLED && !playable && youtubeVideoId(track.yt_url) && { label: 'Baixar do YouTube', icon: Download, onPress: async () => {
+          await startDownload({ url: track.yt_url, title: track.title, trackId: track.id })
+          shell.toast(`Baixando "${track.title}"`)
+        } },
         track.artist && { label: 'Ver artista', icon: User, onPress: () => shell.navigate({ type: 'artist', name: track.artist }) },
         context.playlistId && { label: 'Remover desta playlist', icon: MinusCircle, destructive: true, onPress: async () => {
           await window.electron.playlists.removeTrack(context.playlistId, track.id)

@@ -230,6 +230,39 @@ Interface **no estilo do Spotify mobile** (pedido do usuário), com as cores e b
 - **Ícones:** o projeto usa `lucide-react` 0.344 — nomes antigos (`DownloadCloud`, não `CloudDownload`).
 - **Tailwind do mobile:** `content` com caminhos absolutos (o Tailwind resolve a partir da pasta de execução).
 
+## App para Android (mesmo `mobile/`, branch `mobile`, desde a 0.4.0)
+
+O mesmo app Capacitor gera também o Android (o código de `mobile/src` é o mesmo; as diferenças ficam em
+`platform/paths.js` e nas constantes `ANDROID`/`DEVICE`/`PLATFORM`/`IMPORT_LABEL` de `ui/common.jsx`).
+Novidade só do Android: **baixar músicas do YouTube no próprio celular**.
+
+- **Build:** `.github/workflows/android.yml` (Ubuntu, JDK 21): `vite build` → `npx cap add android` →
+  `mobile/ci/patch-android.sh` (versionCode = nº do run, só `arm64-v8a`, `useLegacyPackaging` +
+  `extractNativeLibs` — exigidos pelo yt-dlp —, retrato, nome, ícones/splash com ImageMagick, assinatura) →
+  `gradlew assembleRelease` → artefato `NianPlay-apk` (~61 MB). Baixar: `gh run download <id> -n NianPlay-apk`.
+- **Assinatura:** chave própria (PKCS12, alias `nianplay`, 30 anos) criada em 18/11/2026 com o OK do usuário. Cópia
+  local em `C:/NianPlay/android-signing/` (fora do repositório; tem LEIA-ME) e nos segredos do repositório
+  `ANDROID_KEYSTORE_B64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`. **Sem essa chave, versões novas não
+  instalam por cima** (teria de desinstalar e perder os dados do celular). SHA-256 do certificado: F1:E1:9C:39:…:BC:75.
+- **Pastas:** `nian-lib://` = `files/` (privado); `nian-docs://` = `Android/data/com.nianplay.mobile/files` (visível pelo
+  cabo USB no PC; o app escaneia ao abrir) e `…/files/YouTube/` recebe os downloads.
+- **Player nativo Android:** `plugins/nian-native-player/android` — `NianPlaybackService` (Media3 ExoPlayer +
+  MediaSessionService: notificação, tela de bloqueio, fone/Bluetooth, pausa ao tirar o fone) com a fila na playlist do
+  ExoPlayer (até 50 anteriores + atual + próximas), volume por música e cortes nos extras de cada item;
+  `NianNativePlayerPlugin.kt` tem a mesma API/eventos do Swift, então `nativeAudio.js` serve aos dois.
+- **YouTube:** `plugins/nian-youtube` (só Android) com **youtubedl-android 0.18.1** (Python + yt-dlp + ffmpeg +
+  QuickJS — o yt-dlp exige um runtime JS para o YouTube desde 2025.11; a biblioteca passa `--js-runtimes quickjs`
+  sozinha). Mesmos argumentos do desktop (`downloader.js`: mp3, capa embutida, `--print` com o link e o arquivo
+  final) + `--embed-metadata`. Um download por vez; arquivo feito no cache e movido para `YouTube/` só quando pronto;
+  wake lock enquanto baixa. `platform/youtube.js` = fila (jobs), busca (`ytsearchN`), atualização do yt-dlp;
+  `media.importDownloaded` põe cada arquivo na faixa para a qual foi pedido → na faixa da nuvem com o mesmo link →
+  título/artista → faixa nova, sempre gravando `yt_url`. UI em `ui/downloads.jsx`: aba Buscar → YouTube (busca ou
+  link de vídeo/playlist), tela Downloads (fila, cancelar, tentar de novo, "Atualizar o yt-dlp"), "Baixar N do
+  YouTube" no hero da playlist e "Baixar do YouTube" no menu da música sem arquivo.
+- **Botão Voltar:** `shell.useBackHandler` (folhas e player em tela cheia fecham primeiro) → página anterior →
+  Início → minimiza o app.
+- **Teste no navegador:** `plugins/nian-youtube/web.js` imita busca/download (sem gerar arquivo).
+
 ## Problemas conhecidos / próximos passos
 
 Fases 1–3 de otimização concluídas (ver `PROGRESSO.md`, versões 1.1.22, 1.1.23 e 1.1.24).

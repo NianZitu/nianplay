@@ -1,14 +1,17 @@
-// iPhone app shell — Spotify-style navigation: 3 tabs (Início, Buscar, Biblioteca), each with
+// Phone app shell (iPhone and Android) — Spotify-style navigation: 3 tabs (Início, Buscar, Biblioteca), each with
 // its own page stack; floating mini player; full-screen player; account opened from the avatar.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
+import { App as CapApp } from '@capacitor/app'
 import { PlayerProvider, usePlayer, usePlayerProgress } from '../../../src/renderer/store/PlayerContext'
 import { AuthProvider } from '../../../src/renderer/contexts/AuthContext'
 import { importFiles as importAudioFiles, scanDocuments, AUDIO_EXT } from '../platform/media'
 import { notifyLibraryChanged } from '../platform/api'
 import { mediaUrl } from '../platform/paths'
-import { ShellContext } from './shell'
-import { Toast, useToast, PromptSheet, Sheet, isPlayable } from './common'
+import { ShellContext, runBackHandler } from './shell'
+import Downloads, { YT_ENABLED } from './downloads'
+import { subscribeEvents } from '../platform/youtube'
+import { Toast, useToast, PromptSheet, Sheet, isPlayable, DEVICE, ANDROID } from './common'
 import { MiniPlayer, TabBar } from './MiniPlayer'
 import { loadRecent } from './playContext'
 import NowPlaying from './NowPlaying'
@@ -33,7 +36,30 @@ function HelpSheet({ onClose }) {
     <div className="flex gap-3"><span className="w-6 h-6 rounded-lg bg-brand-600/20 border border-brand-500/25 text-brand-300 text-xs font-bold flex items-center justify-center shrink-0 tabular-nums">{n}</span><p className="text-sm text-white/65 leading-relaxed">{children}</p></div>
   )
   return (
-    <Sheet title="Colocar músicas no iPhone" onClose={onClose} tall>
+    <Sheet title={`Colocar músicas no ${DEVICE}`} onClose={onClose} tall>
+      {ANDROID ? (
+      <div className="px-3 pt-3 pb-6 flex flex-col gap-3">
+        <div className="panel p-4 flex flex-col gap-3.5">
+        <p className="m-label">Do YouTube</p>
+        <Step n={1}>Na aba <b>Buscar</b>, toque em <b>YouTube</b>, procure a música (ou cole o link) e toque em baixar.</Step>
+        <Step n={2}>Nas playlists vindas da nuvem, use <b>Baixar do YouTube</b> para trazer as músicas que faltam — cada uma vai para o lugar certo.</Step>
+        </div>
+        <div className="panel p-4 flex flex-col gap-3.5">
+        <p className="m-label">Pelo computador (cabo USB)</p>
+        <Step n={1}>Conecte o celular no PC e escolha <b>Transferência de arquivos</b> na notificação do Android.</Step>
+        <Step n={2}>No PC, abra o celular → <b>Android › data › com.nianplay.mobile › files</b>.</Step>
+        <Step n={3}>Copie a sua pasta de músicas (MP3) para lá.</Step>
+        <Step n={4}>Abra o NianPlay: as músicas entram sozinhas na biblioteca e são ligadas às playlists que vieram da nuvem.</Step>
+        </div>
+        <div className="panel p-4 flex flex-col gap-3.5">
+        <p className="m-label">Pelo próprio celular</p>
+        <Step n={1}>Use <b>Importar arquivos</b> em Todas as músicas para escolher músicas de qualquer pasta ou do Google Drive.</Step>
+        </div>
+        <p className="text-xs text-white/35 leading-relaxed px-2 pt-1">
+          Dica: entre na sua conta e use "Baixar da nuvem" antes — assim cada arquivo é ligado à música certa das suas playlists.
+        </p>
+      </div>
+      ) : (
       <div className="px-3 pt-3 pb-6 flex flex-col gap-3">
         <div className="panel p-4 flex flex-col gap-3.5">
         <p className="m-label">Pelo computador (Windows)</p>
@@ -51,6 +77,7 @@ function HelpSheet({ onClose }) {
           Dica: entre na sua conta e use "Baixar da nuvem" antes — assim cada arquivo é ligado à música certa das suas playlists.
         </p>
       </div>
+      )}
     </Sheet>
   )
 }
@@ -93,7 +120,7 @@ function useAddToQueue(showToast) {
   ref.current = { currentTrack, upcomingItems, playNext, playTrack }
   return useCallback(track => {
     const { currentTrack, upcomingItems, playNext, playTrack } = ref.current
-    if (!isPlayable(track)) { showToast('Esta música não está neste iPhone.', false); return }
+    if (!isPlayable(track)) { showToast(`Esta música não está neste ${DEVICE}.`, false); return }
     if (!currentTrack) { playTrack(track, [track]); return }
     let queued = 0
     while (queued < upcomingItems.length && upcomingItems[queued].track?._queued) queued++
@@ -122,6 +149,15 @@ function Shell() {
     window.electron.settings.get('mobileShowMissing').then(v => { if (v === false) setShowMissingState(false) })
     // Music the user dropped in the app's folder since last time
     scanDocuments().then(s => { if (s.added || s.linked) showToast(summaryText(s)) }).catch(() => {})
+  }, [showToast])
+
+  // YouTube downloads (Android): tell when each song is ready / a download failed
+  useEffect(() => {
+    if (!YT_ENABLED) return
+    return subscribeEvents(ev => {
+      if (ev.type === 'file') showToast(`Baixada: ${ev.title}`)
+      else if (ev.type === 'error') showToast(`Download falhou: ${ev.job?.error || ev.job?.title || ev.job?.url}`, false, 5000)
+    })
   }, [showToast])
 
   const navigate = useCallback(page => setStacks(s => ({ ...s, [tab]: [...s[tab], page] })), [tab])
@@ -153,9 +189,25 @@ function Shell() {
     setShowMissing: v => { setShowMissingState(v); window.electron.settings.set('mobileShowMissing', v) },
   }), [navigate, back, showToast, showMissing, addToQueue])
 
+  // Android back button: overlay → previous page → Início → leave the app in the background
+  const nav = useRef({})
+  nav.current = { tab, depth: stacks[tab].length, back, setTab }
+  useEffect(() => {
+    if (!ANDROID) return
+    const sub = CapApp.addListener('backButton', () => {
+      if (runBackHandler()) return
+      const { tab, depth, back, setTab } = nav.current
+      if (depth > 0) back()
+      else if (tab !== 'home') setTab('home')
+      else CapApp.minimizeApp()
+    })
+    return () => { sub.then(h => h.remove()) }
+  }, [])
+
   const top = stacks[tab][stacks[tab].length - 1]
   let screen
   if (top?.type === 'account') screen = <Account />
+  else if (top?.type === 'downloads') screen = <Downloads />
   else if (top) screen = <Collection key={`${top.type}-${top.id || top.name || ''}`} page={top} />
   else screen = tab === 'home' ? <Home /> : tab === 'search' ? <Search /> : <Library />
 

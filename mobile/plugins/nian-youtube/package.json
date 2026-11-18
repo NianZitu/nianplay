@@ -5,9 +5,16 @@
   "description": "NianPlay: YouTube search and audio downloads on Android, with yt-dlp running on the phone (youtubedl-android: Python + yt-dlp + ffmpeg + QuickJS).",
   "main": "index.js",
   "type": "module",
-  "files": ["index.js", "android/src", "android/build.gradle"],
+  "files": [
+    "index.js",
+    "web.js",
+    "android/src",
+    "android/build.gradle"
+  ],
   "capacitor": {
-    "android": { "src": "android" }
+    "android": {
+      "src": "android"
+    }
   },
   "peerDependencies": {
     "@capacitor/core": ">=8.0.0"

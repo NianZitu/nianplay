@@ -3,7 +3,7 @@
 import React, { useMemo } from 'react'
 import { Heart, Download, LogIn } from 'lucide-react'
 import { usePlayer } from '../../../../src/renderer/store/PlayerContext'
-import { useLibrary, Cover, VUBars, PageHeader, SectionTitle, Logo, isPlayable } from '../common'
+import { useLibrary, Cover, VUBars, PageHeader, SectionTitle, Logo, isPlayable, DEVICE, PLATFORM, IMPORT_LABEL } from '../common'
 import { PlaylistArt } from '../tracks'
 import { usePlaylists, greeting } from '../hooks'
 import { usePlayContext, setPlayContext } from '../playContext'
@@ -78,19 +78,19 @@ export default function Home() {
   return (
     <div className="h-full overflow-y-auto overscroll-contain">
       <PageHeader title={greeting()}
-        subtitle={empty ? 'NianPlay para iPhone' : `${library.length.toLocaleString('pt-BR')} faixas · ${playlists.length} playlist${playlists.length !== 1 ? 's' : ''} · ${onPhone.toLocaleString('pt-BR')} no iPhone`}
+        subtitle={empty ? `NianPlay para ${PLATFORM}` : `${library.length.toLocaleString('pt-BR')} faixas · ${playlists.length} playlist${playlists.length !== 1 ? 's' : ''} · ${onPhone.toLocaleString('pt-BR')} no ${DEVICE}`}
         left={<Logo size={26} />}
         right={<button onClick={() => shell.navigate({ type: 'account' })} aria-label="Perfil e ajustes"><Avatar size={36} /></button>} />
 
       {empty ? (
         <div className="mx-3 mt-4 panel p-5 flex flex-col gap-3">
           <p className="m-label">Primeiros passos</p>
-          <p className="text-lg font-bold text-white -mt-1">Bem-vindo ao NianPlay no iPhone</p>
+          <p className="text-lg font-bold text-white -mt-1">Bem-vindo ao NianPlay no {DEVICE}</p>
           <p className="text-sm text-white/45 leading-relaxed">
-            Entre na sua conta para trazer suas playlists da nuvem e depois coloque os arquivos de música no iPhone.
+            Entre na sua conta para trazer suas playlists da nuvem e depois coloque os arquivos de música no {DEVICE}.
           </p>
           <button onClick={() => shell.navigate({ type: 'account' })} className="m-btn-primary mt-1"><LogIn size={17} /> Entrar e baixar da nuvem</button>
-          <button onClick={shell.importFiles} className="m-btn-ghost"><Download size={17} /> Importar do app Arquivos</button>
+          <button onClick={shell.importFiles} className="m-btn-ghost"><Download size={17} /> {IMPORT_LABEL}</button>
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-1.5 px-3 mt-4">

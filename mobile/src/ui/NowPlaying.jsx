@@ -7,7 +7,7 @@ import { usePlayer, usePlayerProgress } from '../../../src/renderer/store/Player
 import { Cover, VUBars, formatTime, trackArt } from './common'
 import { TrackMenu, AddToPlaylistSheet } from './tracks'
 import { usePlayContext } from './playContext'
-import { useShell } from './shell'
+import { useShell, useBackHandler } from './shell'
 
 function Scrubber() {
   const { seek } = usePlayer()
@@ -118,6 +118,7 @@ export default function NowPlaying({ onClose }) {
   const [pull, setPull] = useState(0)
   const pullStart = useRef(null)
   const scroller = useRef(null)
+  useBackHandler(onClose)
 
   useEffect(() => { if (!currentTrack) onClose() }, [currentTrack, onClose])
   if (!currentTrack) return null

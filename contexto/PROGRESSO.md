@@ -6,6 +6,24 @@ Cada entrada: versão, data, o que mudou, por quê, arquivos e status.
 
 ---
 
+## Mobile 0.4.0 — 18/11/2026 — Versão para Android com download do YouTube
+
+**Pedido:** usar a versão do iPhone de base para um app Android, "com a função de baixar as músicas direto do YouTube".
+
+**Feito:** Android pelo mesmo projeto Capacitor (`npx cap add android` no CI); player nativo Media3 (Kotlin) com a mesma
+API do AVPlayer do iPhone; plugin `nian-youtube` com yt-dlp rodando no celular (youtubedl-android 0.18.1, com QuickJS);
+fila de downloads, busca no YouTube, download por link (vídeo ou playlist), "Baixar N do YouTube" nas playlists vindas da
+nuvem e no menu da música; as músicas baixadas entram na biblioteca com capa, tags e link. Textos "iPhone" viraram
+"celular" no Android; ajuda própria do Android (cabo USB → Android/data/com.nianplay.mobile/files); botão Voltar.
+Build assinado no GitHub Actions com chave própria (criada com o OK do usuário, ver CONTEXTO).
+
+**Verificado:** o .apk compila e sai assinado com a chave certa (certificado conferido), só arm64-v8a, 61 MB, com os
+dois plugins. No navegador (imitação do plugin): aba YouTube com resultados e anel de progresso, contador no ícone de
+downloads, tela Downloads (andamento, terminados, erro + tentar de novo), "Baixar 3 do YouTube" numa playlist da nuvem.
+Sem erros no console. **Não testado num Android de verdade** (download real, notificação, segundo plano).
+
+---
+
 ## iPhone 0.3.1 — 12/11/2026 — Sem o painel de grupos no topo da playlist
 
 Pedido do usuário (print da playlist ALL FNF, 21 grupos): o painel "Grupos de sequência" com chips ocupava a tela

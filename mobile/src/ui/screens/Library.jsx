@@ -3,7 +3,7 @@
 // Playlists page gallery for the grid view.
 import React, { useEffect, useMemo, useState } from 'react'
 import { Plus, ArrowUpDown, Pin, LayoutGrid, List as ListIcon, ListMusic, Users } from 'lucide-react'
-import { useLibrary, Cover, PageHeader, EmptyState, isPlayable } from '../common'
+import { useLibrary, Cover, PageHeader, EmptyState, isPlayable, DEVICE } from '../common'
 import { PlaylistArt } from '../tracks'
 import { usePlaylists } from '../hooks'
 import { usePlayContext } from '../playContext'
@@ -11,6 +11,7 @@ import { useShell } from '../shell'
 import { Avatar } from './Account'
 import { artistsOf } from './Search'
 import { AllSongsArt, Card } from './Home'
+import { DownloadsIcon } from '../downloads'
 
 const FILTERS = [
   { id: null, label: 'Tudo' },
@@ -59,13 +60,14 @@ export default function Library() {
     },
   })
   const showAll = filter !== 'artists'
-  const allMeta = `${library.length.toLocaleString('pt-BR')} faixas${library.length ? ` · ${onPhone.toLocaleString('pt-BR')} no iPhone` : ''}`
+  const allMeta = `${library.length.toLocaleString('pt-BR')} faixas${library.length ? ` · ${onPhone.toLocaleString('pt-BR')} no ${DEVICE}` : ''}`
 
   return (
     <div className="h-full overflow-y-auto overscroll-contain">
       <PageHeader title="Biblioteca"
         subtitle={`${playlists.length} playlist${playlists.length !== 1 ? 's' : ''} · ${allArtists.length} artista${allArtists.length !== 1 ? 's' : ''} · ${library.length.toLocaleString('pt-BR')} faixas`}
         right={<>
+          <DownloadsIcon />
           <button onClick={newPlaylist} className="m-chip-primary !px-3" aria-label="Nova playlist"><Plus size={17} /> Nova</button>
           <button onClick={() => shell.navigate({ type: 'account' })} aria-label="Perfil e ajustes"><Avatar size={36} /></button>
         </>}>

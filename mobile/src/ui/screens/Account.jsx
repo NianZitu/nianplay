@@ -9,6 +9,8 @@ import { useAuth } from '../../../../src/renderer/contexts/AuthContext'
 import { usePlayer } from '../../../../src/renderer/store/PlayerContext'
 import { notifyLibraryChanged } from '../../platform/api'
 import { useShell } from '../shell'
+import { DEVICE, ANDROID, PLATFORM, IMPORT_LABEL } from '../common'
+import { YT_ENABLED } from '../downloads'
 
 // Same frames as the desktop NavRail avatar (ring color + glow)
 const FRAME_STYLE = {
@@ -97,7 +99,7 @@ function LoginForm() {
       <button onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError('') }} className="m-btn-ghost">
         {mode === 'login' ? 'Não tem conta? Criar conta' : 'Já tem conta? Entrar'}
       </button>
-      <p className="text-xs text-white/30 leading-relaxed">O login com Google não está disponível no iPhone — use e-mail e senha.</p>
+      <p className="text-xs text-white/30 leading-relaxed">O login com Google não está disponível no {DEVICE} — use e-mail e senha.</p>
     </div>
   )
 }
@@ -227,7 +229,7 @@ export default function Account() {
           <Section icon={Cloud} title="Nuvem" color="text-accent-400">
             <Row icon={syncStatus?.downloading ? Loader2 : DownloadCloud} accent
               label={syncStatus?.downloading ? 'Baixando da nuvem…' : 'Baixar da nuvem'}
-              sub="Traz playlists, links, ganhos e letras salvos pelo computador. Músicas sem arquivo neste iPhone aparecem esmaecidas até você importar os arquivos."
+              sub={`Traz playlists, links, ganhos e letras salvos pelo computador. Músicas sem arquivo neste ${DEVICE} aparecem esmaecidas até você importar os arquivos.`}
               onPress={syncStatus?.downloading ? undefined : download} />
             {syncStatus?.error && <p className="px-4 py-2 text-sm text-red-400">Erro: {syncStatus.error}</p>}
             <p className="px-4 py-2.5 text-xs text-white/30 leading-relaxed">Para enviar alterações para a nuvem, use o NianPlay no computador.</p>
@@ -235,9 +237,15 @@ export default function Account() {
         </>
       )}
 
-      <Section icon={Smartphone} title="Músicas neste iPhone">
-        <Row icon={Download} label="Importar do app Arquivos" sub="Copia os arquivos escolhidos para dentro do NianPlay." onPress={shell.importFiles} />
-        <Row icon={FolderSearch} label="Procurar na pasta do NianPlay" sub='Lê as músicas colocadas em "No meu iPhone › NianPlay".' onPress={shell.scanDocs} />
+      {YT_ENABLED && (
+        <Section icon={Download} title="YouTube" color="text-accent-400">
+          <Row icon={Download} accent label="Downloads" sub="Fila de downloads e atualização do yt-dlp. Para baixar, use Buscar → YouTube ou o botão nas playlists." onPress={() => shell.navigate({ type: 'downloads' })} />
+        </Section>
+      )}
+
+      <Section icon={Smartphone} title={`Músicas neste ${DEVICE}`}>
+        <Row icon={Download} label={IMPORT_LABEL} sub="Copia os arquivos escolhidos para dentro do NianPlay." onPress={shell.importFiles} />
+        <Row icon={FolderSearch} label="Procurar na pasta do NianPlay" sub={ANDROID ? 'Lê as músicas copiadas para Android › data › com.nianplay.mobile › files (inclusive os downloads do YouTube).' : 'Lê as músicas colocadas em "No meu iPhone › NianPlay".'} onPress={shell.scanDocs} />
         <Row icon={HelpCircle} label="Como copiar músicas pelo computador" onPress={shell.showHelp} />
       </Section>
 
@@ -254,7 +262,7 @@ export default function Account() {
             <div className="flex-1 min-w-0">
               <p className="text-[15px] text-white/90">Volume do NianPlay</p>
               <p className="text-[12.5px] text-white/35 mt-0.5 leading-snug">
-                {native || webAudio ? 'Deixa todas as músicas mais baixas, para controlar melhor pelo volume do iPhone.'
+                {native || webAudio ? `Deixa todas as músicas mais baixas, para controlar melhor pelo volume do ${DEVICE}.`
                   : 'Só funciona com a equalização de volume ligada.'}
               </p>
             </div>
@@ -276,7 +284,7 @@ export default function Account() {
       </Section>
 
       <Section icon={Info} title="Sobre" color="text-white/40">
-        <Row label="Versão" sub={`NianPlay para iPhone ${version}`} right={<span className="badge-muted">iOS</span>} />
+        <Row label="Versão" sub={`NianPlay para ${PLATFORM} ${version}`} right={<span className="badge-muted">{ANDROID ? 'Android' : 'iOS'}</span>} />
         {user && (
           <button onClick={logout} className="w-full flex items-center gap-3.5 px-4 py-3 text-left text-red-400 active:bg-white/5">
             <span className="w-9 h-9 rounded-xl bg-red-500/10 flex items-center justify-center shrink-0"><LogOut size={17} /></span>

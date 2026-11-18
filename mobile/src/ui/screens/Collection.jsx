@@ -6,7 +6,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronLeft, Play, Pause, Shuffle, MoreHorizontal, Search, X, Download, FolderSearch, Eye, EyeOff, HelpCircle, Pencil, Trash2, Plus, Check, Folder, FolderOpen, ChevronDown, Layers, Tag, PlusCircle, DownloadCloud, ListMusic, Music2 } from 'lucide-react'
 import { usePlayer } from '../../../../src/renderer/store/PlayerContext'
 import VirtualRows from '../../../../src/renderer/components/VirtualRows'
-import { useLibrary, isPlayable, Sheet, Cover, MenuList, EmptyState, VUBars } from '../common'
+import { useLibrary, isPlayable, Sheet, Cover, MenuList, EmptyState, VUBars, DEVICE, ANDROID, IMPORT_LABEL } from '../common'
 import { TrackRow, TrackMenu, PlaylistArt, ROW_HEIGHT } from '../tracks'
 import { useDominantColor, usePlaylists } from '../hooks'
 import { buildGroupedQueue } from '../queue'
@@ -14,6 +14,8 @@ import { setPlayContext, usePlayContext, forgetContext } from '../playContext'
 import { useShell } from '../shell'
 import { notifyLibraryChanged } from '../../platform/api'
 import { AllSongsArt } from './Home'
+import { YT_ENABLED, startDownload } from '../downloads'
+import { youtubeVideoId } from '../../../../src/renderer/utils/mediaUrl'
 
 const totalDuration = tracks => {
   const s = tracks.reduce((sum, t) => sum + (t.duration || 0), 0)
@@ -106,7 +108,7 @@ export default function Collection({ page }) {
   function playGroup(group) {
     const q = buildGroupedQueue(baseTracks, groups, false).filter(isPlayable)
     const first = q.find(t => t.group_id === group.id)
-    if (!first) { shell.toast('Nenhuma música deste grupo está neste iPhone.', false); return }
+    if (!first) { shell.toast(`Nenhuma música deste grupo está neste ${DEVICE}.`, false); return }
     player.setGroupsEnabled(true)
     player.setShuffle(false)
     player.playTrack(first, q)
@@ -115,7 +117,7 @@ export default function Collection({ page }) {
 
   function start(track = null, shuffled = shuffleMode) {
     if (!playableQueue.length) {
-      shell.toast('Nenhuma música desta lista está neste iPhone. Importe os arquivos em Todas as músicas.', false, 4500)
+      shell.toast(`Nenhuma música desta lista está neste ${DEVICE}. Importe os arquivos em Todas as músicas.`, false, 4500)
       return
     }
     player.setGroupsEnabled(groupsOn)
@@ -133,7 +135,7 @@ export default function Collection({ page }) {
 
   function onPlayRow(track) {
     if (!isPlayable(track)) {
-      shell.toast('Esta música não está neste iPhone. Importe o arquivo em Biblioteca → Todas as músicas.', false, 4500)
+      shell.toast(`Esta música não está neste ${DEVICE}. Importe o arquivo em Biblioteca → Todas as músicas.`, false, 4500)
       return
     }
     start(track)
@@ -160,6 +162,12 @@ export default function Collection({ page }) {
 
   const onIphone = baseTracks.filter(isPlayable).length
   const missing = baseTracks.length - onIphone
+  // Android: songs without a file here that have a YouTube link can be downloaded right away
+  const downloadable = YT_ENABLED ? baseTracks.filter(t => !isPlayable(t) && youtubeVideoId(t.yt_url)) : []
+  async function downloadMissing() {
+    for (const t of downloadable) await startDownload({ url: t.yt_url, title: t.title, trackId: t.id })
+    shell.toast(`${downloadable.length} música${downloadable.length !== 1 ? 's' : ''} na fila de download`)
+  }
   const eyebrow = page.type === 'playlist' ? 'Playlist' : page.type === 'artist' ? 'Artista' : 'Biblioteca'
   const playingHere = contextActive && player.isPlaying
 
@@ -208,8 +216,14 @@ export default function Collection({ page }) {
               </p>
               {missing > 0 && (
                 <p className="text-[11.5px] text-amber-400/80 mt-1 flex items-center gap-1">
-                  <DownloadCloud size={12} className="shrink-0" /> {missing} sem arquivo neste iPhone
+                  <DownloadCloud size={12} className="shrink-0" /> {missing} sem arquivo neste {DEVICE}
                 </p>
+              )}
+              {downloadable.length > 0 && (
+                <button onClick={downloadMissing}
+                  className="mt-2 h-8 px-3 rounded-lg bg-accent-600/15 border border-accent-500/25 text-accent-300 text-[12px] font-semibold flex items-center gap-1.5 active:scale-95 transition-transform">
+                  <Download size={13} /> Baixar {downloadable.length} do YouTube
+                </button>
               )}
             </div>
           </div>
@@ -313,7 +327,7 @@ function GroupRow({ group, tracks, open, onToggle, onPlay, current, playing }) {
         <div className="flex-1 min-w-0">
           <p className="text-[15px] font-semibold truncate" style={{ color: group.color }}>{group.name}</p>
           <p className="text-[12px] text-white/35 truncate">
-            Grupo · {tracks.length} faixa{tracks.length !== 1 ? 's' : ''}{here < tracks.length ? ` · ${here} no iPhone` : ''}
+            Grupo · {tracks.length} faixa{tracks.length !== 1 ? 's' : ''}{here < tracks.length ? ` · ${here} no ${DEVICE}` : ''}
           </p>
         </div>
         {hasActive && <VUBars playing={playing} bars={3} height={11} />}
@@ -344,9 +358,9 @@ function CollectionEmpty({ page, hasQuery, onAdd }) {
     )
   }
   return (
-    <EmptyState icon={Music2} title="Coloque suas músicas no iPhone"
-      desc="Importe arquivos do app Arquivos ou copie sua pasta de músicas pelo computador.">
-      <button onClick={shell.importFiles} className="m-btn-primary"><Download size={17} /> Importar do app Arquivos</button>
+    <EmptyState icon={Music2} title={`Coloque suas músicas no ${DEVICE}`}
+      desc={ANDROID ? 'Baixe do YouTube na aba Buscar, importe arquivos ou copie sua pasta de músicas pelo computador.' : 'Importe arquivos do app Arquivos ou copie sua pasta de músicas pelo computador.'}>
+      <button onClick={shell.importFiles} className="m-btn-primary"><Download size={17} /> {IMPORT_LABEL}</button>
       <button onClick={shell.showHelp} className="m-btn-ghost"><HelpCircle size={17} /> Como copiar pelo computador</button>
     </EmptyState>
   )
@@ -380,7 +394,7 @@ function MoreMenu({ page, playlist, groups = [], only = null, onClose, onAdd, on
     return (
       <Sheet title={`Excluir "${playlist?.name}"`} onClose={onClose}>
         <div className="px-5 pt-4 pb-4 flex flex-col gap-3">
-          <p className="text-sm text-white/55 leading-relaxed">A playlist sai deste iPhone. As músicas continuam na biblioteca e a nuvem não é alterada.</p>
+          <p className="text-sm text-white/55 leading-relaxed">A playlist sai deste {DEVICE}. As músicas continuam na biblioteca e a nuvem não é alterada.</p>
           <div className="flex gap-2 pt-1">
             <button className="m-btn-ghost" onClick={onClose}>Cancelar</button>
             <button className="m-btn-danger" onClick={async () => {
@@ -425,11 +439,11 @@ function MoreMenu({ page, playlist, groups = [], only = null, onClose, onAdd, on
     ...groupItems,
     { label: 'Excluir playlist', icon: Trash2, destructive: true, keep: true, onPress: () => setConfirmDelete(true) },
   ] : [
-    { label: 'Importar do app Arquivos', icon: Download, onPress: shell.importFiles },
+    { label: IMPORT_LABEL, icon: Download, onPress: shell.importFiles },
     { label: 'Procurar na pasta do NianPlay', icon: FolderSearch, onPress: shell.scanDocs },
-    { label: shell.showMissing ? 'Ocultar músicas que não estão no iPhone' : 'Mostrar músicas que não estão no iPhone',
+    { label: shell.showMissing ? `Ocultar músicas que não estão no ${DEVICE}` : `Mostrar músicas que não estão no ${DEVICE}`,
       icon: shell.showMissing ? EyeOff : Eye, onPress: () => shell.setShowMissing(!shell.showMissing) },
-    { label: 'Como colocar músicas no iPhone', icon: HelpCircle, onPress: shell.showHelp },
+    { label: `Como colocar músicas no ${DEVICE}`, icon: HelpCircle, onPress: shell.showHelp },
   ]
   return (
     <Sheet title={only === 'groups' ? 'Grupos de sequência' : page.type === 'playlist' ? playlist?.name : 'Todas as músicas'} onClose={onClose}>

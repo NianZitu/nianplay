@@ -1,7 +1,14 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import { Music2, X } from 'lucide-react'
+import { useBackHandler } from './shell'
 import { listCoverSrc, coverSrc } from '../../../src/renderer/utils/covers'
-import { mediaUrl } from '../platform/paths'
+import { mediaUrl, isAndroid } from '../platform/paths'
+
+// What the texts call this phone
+export const ANDROID = isAndroid()
+export const DEVICE = ANDROID ? 'celular' : 'iPhone'
+export const PLATFORM = ANDROID ? 'Android' : 'iPhone'
+export const IMPORT_LABEL = ANDROID ? 'Importar arquivos' : 'Importar do app Arquivos'
 
 export const formatTime = secs => {
   if (!secs || !Number.isFinite(secs)) return '0:00'
@@ -93,6 +100,7 @@ export function SectionTitle({ label, title, right, className = '' }) {
 
 // Bottom sheet with the desktop modal look (modal-box / modal-header). Tapping the backdrop closes it.
 export function Sheet({ title, onClose, children, tall = false }) {
+  useBackHandler(onClose)
   return (
     <div className="fixed inset-0 z-[60] flex flex-col justify-end">
       <div className="absolute inset-0 bg-black/65 backdrop-blur-sm fade-in" onClick={onClose} />
