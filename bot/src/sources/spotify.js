@@ -2,11 +2,31 @@
 // each track is played from YouTube, searched by "artist - title" when its turn comes.
 const config = require('../config')
 
-const SPOTIFY_RE = /^https?:\/\/open\.spotify\.com\/(?:intl-[a-z-]+\/)?(track|album|playlist)\/([A-Za-z0-9]+)/i
+// open.spotify.com/track/ID, /intl-pt/track/ID, /embed/track/ID, ?si=...  and  spotify:track:ID
+const SPOTIFY_RE = /^https?:\/\/open\.spotify\.com\/(?:intl-[a-z-]+\/)?(?:embed\/)?(track|album|playlist)\/([A-Za-z0-9]+)/i
+const SPOTIFY_URI_RE = /^spotify:(track|album|playlist):([A-Za-z0-9]+)$/i
+// Short links from the "Share" button of the phone app
+const SHORT_RE = /^https?:\/\/(?:spotify\.link|spotify\.app\.link)\/\S+$/i
+
 const parseSpotify = url => {
-  const m = (url || '').trim().match(SPOTIFY_RE)
+  const t = (url || '').trim()
+  const m = t.match(SPOTIFY_RE) || t.match(SPOTIFY_URI_RE)
   return m ? { type: m[1].toLowerCase(), id: m[2] } : null
 }
+const isSpotifyLink = text => Boolean(parseSpotify(text)) || SHORT_RE.test((text || '').trim())
+
+// spotify.link/abc → https://open.spotify.com/track/ID (redirect, or the link inside the page)
+async function expandShortLink(url) {
+  const res = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(15000), headers: { 'User-Agent': 'Mozilla/5.0' } })
+  if (parseSpotify(res.url)) return res.url
+  const html = await res.text().catch(() => '')
+  const m = html.match(/https?:\/\/open\.spotify\.com\/(?:intl-[a-z-]+\/)?(?:track|album|playlist)\/[A-Za-z0-9]+/i)
+  if (m) return m[0]
+  throw new Error('Não consegui abrir esse link curto do Spotify. Copie o link completo (open.spotify.com).')
+}
+
+// Normalized open.spotify.com URL (what the embed reader expects)
+const canonicalSpotify = ({ type, id }) => `https://open.spotify.com/${type}/${id}`
 
 const item = (name, artist, durationMs) => ({
   title: name || 'Sem título',
@@ -77,14 +97,22 @@ async function resolveWithEmbed(url) {
 }
 
 async function resolveSpotify(url) {
-  const parsed = parseSpotify(url)
+  let text = (url || '').trim()
+  if (SHORT_RE.test(text)) text = await expandShortLink(text)
+  const parsed = parseSpotify(text)
   if (!parsed) throw new Error('Link do Spotify não reconhecido (use faixa, álbum ou playlist).')
   if (config.spotifyClientId && config.spotifyClientSecret) {
     try { return await resolveWithApi(parsed) } catch (e) { console.warn('[Spotify] API falhou, usando embed:', e.message) }
   }
-  const res = await resolveWithEmbed(url)
+  let res
+  try {
+    res = await resolveWithEmbed(canonicalSpotify(parsed))
+  } catch (e) {
+    console.warn('[Spotify] embed falhou:', e.message)
+    throw new Error('Não consegui ler esse link do Spotify agora. Confira se a playlist é pública e tente de novo.')
+  }
   if (!res.items.length) throw new Error('Não consegui ler esse link do Spotify (privado ou indisponível).')
   return res
 }
 
-module.exports = { parseSpotify, resolveSpotify }
+module.exports = { parseSpotify, isSpotifyLink, resolveSpotify }

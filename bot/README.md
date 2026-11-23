@@ -100,7 +100,12 @@ Os cookies expiram de tempos em tempos; se o bloqueio voltar, exporte de novo.
 
 Sem configuração, playlists e álbuns do Spotify são lidos pela página pública (até ~100 faixas).
 Para playlists maiores, crie um app gratuito em <https://developer.spotify.com/dashboard> e preencha
-`SPOTIFY_CLIENT_ID` e `SPOTIFY_CLIENT_SECRET` no `.env`. O áudio sempre vem do YouTube (o Spotify não permite tocar o áudio dele).
+`SPOTIFY_CLIENT_ID` e `SPOTIFY_CLIENT_SECRET` no `.env`.
+
+O áudio do Spotify é protegido (DRM) e os termos do Spotify não permitem que bots o transmitam — por isso nenhum bot toca
+direto de lá. O NianPlay Bot procura cada faixa no **YouTube Music** (o áudio oficial do mesmo lançamento) e só aceita
+o resultado se a **duração bater com a do Spotify** (até 7 s de diferença); se não achar, usa a busca normal do YouTube.
+Aceita links `open.spotify.com/...` (com `intl-pt` e `?si=`), links curtos do celular (`spotify.link/...`) e `spotify:track:...`.
 
 ## Atualizar
 

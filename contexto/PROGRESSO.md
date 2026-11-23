@@ -6,6 +6,22 @@ Cada entrada: versão, data, o que mudou, por quê, arquivos e status.
 
 ---
 
+## Bot — 23/11/2026 — Spotify: links do celular e faixa certa pelo YouTube Music
+
+**Pedido:** o bot não aceitava links do Spotify; o usuário queria tocar "direto do Spotify" para não errar a música
+equivalente no YouTube. Tocar direto não é possível (áudio com DRM; termos do Spotify proíbem) — explicado ao usuário.
+- Links: além de `open.spotify.com/(intl-xx/)(embed/)track|album|playlist/ID?si=`, agora aceita `spotify:track:ID` e os
+  links curtos do app do celular (`spotify.link/...`, `spotify.app.link/...`, expandidos por redirect ou pelo link na
+  página). Erro do leitor público vira mensagem amigável (antes saía o erro cru da biblioteca).
+- Faixas do Spotify: `findOnYoutubeMusic` busca em `music.youtube.com/search?q=...#songs` (áudio oficial), ordena por
+  título (`musicScore`: ignora feat./from, penaliza remix/live/cover/etc. que não foram pedidos) e confirma a duração com
+  `info()` (≤ 7 s; até 2 candidatos) — a mesma chamada já traz o endereço do áudio. Sem acerto → busca normal.
+- Teste real: 7 faixas (playlist Today's Top Hits + álbum): 6 pelo YouTube Music com duração idêntica, 1 pela busca
+  normal (1 s de diferença). ~7,5 s por faixa, igual a antes e escondido pela pré-carga.
+- Testes 17/17 (novo `test/spotify.test.js`).
+
+---
+
 ## Bot — 23/11/2026 — Navegar na música: /forward, /rewind e tempo "3m15s"
 
 **Pedido:** avançar/voltar 30 s e ir para um tempo escrito como em outros bots (`3m15s`).

@@ -9,7 +9,7 @@ const {
 } = require('@discordjs/voice')
 const config = require('../config')
 const ytdlp = require('../sources/ytdlp')
-const { findOnYoutube } = require('../sources/resolve')
+const { findOnYoutube, findOnYoutubeMusic } = require('../sources/resolve')
 const { createPcmStream, normalizeCuts, playableDuration, playableToAudio } = require('./stream')
 const { shuffleArray, groupedShuffle, hasGroups } = require('../queue/grouping')
 
@@ -171,10 +171,19 @@ class GuildPlayer {
 
   async _resolvePlayable(item) {
     if (!item.url) {
-      const found = await findOnYoutube(item)
+      // Spotify: the official audio on YouTube Music, checked by duration; otherwise normal search
+      let found = null
+      if (item.source === 'spotify') {
+        found = await findOnYoutubeMusic(item).catch(err => {
+          console.warn(`[${this.guild.name}] YouTube Music falhou para "${item.title}":`, err.message)
+          return null
+        })
+      }
+      if (!found) found = await findOnYoutube(item)
       item.url = found.url
       item.resolvedTitle = found.title
       if (!item.duration) item.duration = found.duration
+      if (found.streamUrl) { item.streamUrl = found.streamUrl; item.streamUrlAt = Date.now() }
     }
     if (!this._isReady(item)) {
       item.streamUrl = await ytdlp.streamUrl(item.url)

@@ -75,6 +75,18 @@ async function search(query, limit = 5) {
   }))
 }
 
+// YouTube Music "songs" search: official audio of the releases (the same recordings as Spotify).
+// Flat results only carry id + title, so the caller confirms the duration with info().
+async function searchMusic(query, limit = 5) {
+  const url = `https://music.youtube.com/search?q=${encodeURIComponent(query)}#songs`
+  const data = JSON.parse(await run(['-J', '--flat-playlist', '--playlist-end', String(limit), url]))
+  return (data.entries || []).filter(e => e && e.id).slice(0, limit).map(e => ({
+    id: e.id,
+    url: `https://www.youtube.com/watch?v=${e.id}`,
+    title: e.title || '',
+  }))
+}
+
 // Direct audio URL for streaming
 async function streamUrl(videoUrl) {
   const out = await run(['-f', AUDIO_FORMAT, '-g', '--no-playlist', videoUrl])
@@ -83,4 +95,4 @@ async function streamUrl(videoUrl) {
   return url
 }
 
-module.exports = { run, info, audioUrlOf, search, streamUrl, AUDIO_FORMAT }
+module.exports = { run, info, audioUrlOf, search, searchMusic, streamUrl, AUDIO_FORMAT }
