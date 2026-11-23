@@ -273,6 +273,21 @@ class GuildPlayer {
     return target
   }
 
+  // Moves `delta` seconds from the current position (negative = back). Going past the end skips
+  // to the next track. Returns { at } | { skipped: true } | false (still loading).
+  async seekBy(delta) {
+    const item = this.current
+    if (!item || !item.streamUrl) return false
+    const max = item.playableDuration || item.duration || 0
+    const target = Math.max(0, this.elapsed + delta)
+    if (max && target >= max - 1) {
+      await this.skip()
+      return { skipped: true }
+    }
+    const at = await this.seek(target)
+    return at === false ? false : { at }
+  }
+
   setVolume(v) {
     this.volume = Math.max(0, Math.min(200, Math.round(v)))
     this.resource?.volume?.setVolume(this.volume / 100)

@@ -38,8 +38,12 @@ const definitions = [
       .addChoices({ name: 'desligada', value: 'off' }, { name: 'faixa atual', value: 'track' }, { name: 'fila inteira', value: 'queue' })),
   new SlashCommandBuilder().setName('volume').setDescription('Ajusta o volume (0 a 200%)')
     .addIntegerOption(o => o.setName('valor').setDescription('Volume em %').setMinValue(0).setMaxValue(200).setRequired(true)),
-  new SlashCommandBuilder().setName('seek').setDescription('Vai para um ponto da música (ex.: 1:30 ou 90)')
-    .addStringOption(o => o.setName('tempo').setDescription('mm:ss ou segundos').setRequired(true)),
+  new SlashCommandBuilder().setName('seek').setDescription('Vai para um ponto da música (ex.: 3m15s, 1:30, 1h2m3s ou 90)')
+    .addStringOption(o => o.setName('tempo').setDescription('Ex.: 3m15s, 1:30, 1h2m3s ou 90 (segundos)').setRequired(true)),
+  new SlashCommandBuilder().setName('forward').setDescription('Avança na música (padrão: 30 segundos)')
+    .addStringOption(o => o.setName('tempo').setDescription('Quanto avançar. Ex.: 30s, 1m, 1m30s, 90')),
+  new SlashCommandBuilder().setName('rewind').setDescription('Volta na música (padrão: 30 segundos)')
+    .addStringOption(o => o.setName('tempo').setDescription('Quanto voltar. Ex.: 30s, 1m, 1m30s, 90')),
   new SlashCommandBuilder().setName('remove').setDescription('Remove uma música da fila')
     .addIntegerOption(o => o.setName('posicao').setDescription('Posição na fila (veja /queue)').setMinValue(1).setRequired(true)),
   new SlashCommandBuilder().setName('move').setDescription('Muda uma música de posição na fila')
@@ -76,6 +80,23 @@ function requireSameChannel(interaction, player) {
 
 function requireCurrent(player) {
   if (!player?.current) throw new UserError('Nada tocando agora.')
+}
+
+const TIME_HELP = 'Tempo inválido. Exemplos: `3m15s`, `1h2m3s`, `45s`, `1:30` ou `90` (segundos).'
+const SEEK_STEP = 30
+
+// /forward and /rewind: direction 1 = forward, -1 = back
+async function seekByCommand(interaction, players, direction) {
+  const player = players.get(interaction.guild); requireSameChannel(interaction, player); requireCurrent(player)
+  const text = interaction.options.getString('tempo')
+  const secs = text ? parseTime(text) : SEEK_STEP
+  if (secs === null || secs <= 0) throw new UserError(TIME_HELP)
+  await interaction.deferReply()
+  const r = await player.seekBy(direction * secs)
+  const embed = r === false ? ui.error('Ainda carregando a música, tente de novo.')
+    : r.skipped ? ui.info('⏭️ Passou do fim da música — indo para a próxima.')
+    : ui.info(`${direction > 0 ? '⏩ Avançou' : '⏪ Voltou'} ${formatTime(secs)} — agora em \`${formatTime(r.at)}\`.`)
+  await interaction.editReply({ embeds: [embed] })
 }
 
 const requester = interaction => interaction.member?.displayName || interaction.user.username
@@ -243,11 +264,14 @@ const handlers = {
   async seek(interaction, players) {
     const player = players.get(interaction.guild); requireSameChannel(interaction, player); requireCurrent(player)
     const secs = parseTime(interaction.options.getString('tempo', true))
-    if (secs === null) throw new UserError('Tempo inválido. Use mm:ss (ex.: 1:30) ou segundos (ex.: 90).')
+    if (secs === null) throw new UserError(TIME_HELP)
     await interaction.deferReply()
     const at = await player.seek(secs)
     await interaction.editReply({ embeds: [at === false ? ui.error('Ainda carregando a música, tente de novo.') : ui.info(`⏩ Indo para \`${formatTime(at)}\`.`)] })
   },
+
+  forward(interaction, players) { return seekByCommand(interaction, players, 1) },
+  rewind(interaction, players) { return seekByCommand(interaction, players, -1) },
 
   async remove(interaction, players) {
     const player = players.get(interaction.guild); requireSameChannel(interaction, player)
@@ -299,7 +323,8 @@ const handlers = {
       '`/group` playlist do NianPlay com os grupos de sequência ativos',
       '',
       '**Controle**',
-      '`/pause` `/resume` `/skip` `/previous` `/stop` `/leave` `/seek` `/volume`',
+      '`/pause` `/resume` `/skip` `/previous` `/stop` `/leave` `/volume`',
+      '`/seek` vai para um ponto (ex.: `3m15s`, `1:30`) — `/forward` e `/rewind` avançam/voltam (padrão 30s)',
       '`/loop` desligada, faixa ou fila',
       '`/shuffle` embaralha a fila — no modo grupo, embaralha só a ordem dos grupos e intercala as avulsas',
       '',

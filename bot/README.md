@@ -19,12 +19,13 @@ inclusive com os **grupos de sequência**. Nada é baixado: o áudio é transmit
 | `/queue [pagina]` `/nowplaying` | Fila / música atual (com barra de progresso) |
 | `/loop modo` | Repetição: desligada, faixa ou fila |
 | `/volume valor` | 0 a 200% |
-| `/seek tempo` | Vai para um ponto (`1:30` ou `90`) |
+| `/seek tempo` | Vai para um ponto da música: `3m15s`, `1h2m3s`, `45s`, `1:30` ou `90` |
+| `/forward [tempo]` `/rewind [tempo]` | Avança / volta na música (padrão: 30 segundos; aceita os mesmos formatos) |
 | `/remove` `/move` `/skipto` `/clear` | Edita a fila |
 | `/lyrics` | Letra (a salva no NianPlay, ou do lyrics.ovh) |
 | `/help` | Lista de comandos |
 
-A mensagem "Tocando agora" tem botões: ⏮️ ⏯️ ⏭️ 🔀 🔁 ⏹️.
+A mensagem "Tocando agora" tem botões: ⏮️ ⏪30s ⏯️ ⏩30s ⏭️ / 🔀 🔁 ⏹️.
 
 ### Compatibilidade com o NianPlay
 - O bot lê as playlists que você **enviou para a nuvem** no app (menu da conta → *Enviar para nuvem*).

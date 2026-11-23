@@ -6,6 +6,18 @@ Cada entrada: versão, data, o que mudou, por quê, arquivos e status.
 
 ---
 
+## Bot — 23/11/2026 — Navegar na música: /forward, /rewind e tempo "3m15s"
+
+**Pedido:** avançar/voltar 30 s e ir para um tempo escrito como em outros bots (`3m15s`).
+- `parseTime` (`bot/src/ui/format.js`) aceita `90`, `1:30`, `1:02:03`, `3m15s`, `3m 15s`, `1h2m3s`, `45s`, `2m`/`2min`,
+  `1h`, `1h30` (= 1h30m). Vale para `/seek`, `/forward` e `/rewind`.
+- Novos `/forward [tempo]` e `/rewind [tempo]` (padrão 30 s) → `GuildPlayer.seekBy(delta)`: parte da posição atual,
+  não passa de 0 e, se passar do fim, pula para a próxima faixa.
+- Botões ⏪30s e ⏩30s no "Tocando agora": linha 1 ⏮️ ⏪ ⏯️ ⏩ ⏭️, linha 2 🔀 🔁 ⏹️ (limite de 5 por linha respeitado).
+- 24 comandos (o `update.sh` registra de novo). Testes 15/15 (novo `test/time.test.js`, `seekBy` em `player.test.js`).
+
+---
+
 ## Bot — 08/11/2026 — Instalação na VPS falhava no `npm ci`
 
 **Problema:** na VPS (Ubuntu 24.04, npm 10.9) o `install.sh` parava em `npm ci`: "Missing: opusscript@0.0.8 from lock

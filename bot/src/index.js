@@ -95,6 +95,12 @@ async function handleButton(interaction) {
     case 'toggle': player.isPaused ? player.resume() : player.pause(); break
     case 'skip': await interaction.deferUpdate(); await player.skip(); return
     case 'previous': await interaction.deferUpdate(); await player.previous(); return
+    case 'rewind':
+    case 'forward': {
+      await interaction.deferUpdate()
+      await player.seekBy(arg === 'forward' ? 30 : -30)   // the progress shows in /nowplaying
+      return
+    }
     case 'shuffle': {
       const { mode } = player.shuffle()
       await interaction.reply({ embeds: [ui.info(mode === 'groups' ? '🔀 Ordem dos grupos embaralhada.' : mode === 'none' ? 'Fila curta demais para embaralhar.' : '🔀 Fila embaralhada.')], flags: MessageFlags.Ephemeral })

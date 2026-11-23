@@ -46,14 +46,16 @@ function nowPlayingEmbed(player, { withProgress = false } = {}) {
 function controls(player) {
   const playback = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('np:previous').setEmoji('⏮️').setStyle(ButtonStyle.Secondary).setDisabled(player.index <= 0),
+    new ButtonBuilder().setCustomId('np:rewind').setEmoji('⏪').setLabel('30s').setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId('np:toggle').setEmoji(player.isPaused ? '▶️' : '⏸️').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId('np:forward').setEmoji('⏩').setLabel('30s').setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId('np:skip').setEmoji('⏭️').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId('np:stop').setEmoji('⏹️').setStyle(ButtonStyle.Danger),
   )
   const modes = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('np:shuffle').setEmoji('🔀').setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId('np:loop').setEmoji(player.loop === 'track' ? '🔂' : '🔁')
       .setStyle(player.loop === 'off' ? ButtonStyle.Secondary : ButtonStyle.Success),
+    new ButtonBuilder().setCustomId('np:stop').setEmoji('⏹️').setStyle(ButtonStyle.Danger),
   )
   return [playback.toJSON(), modes.toJSON()]
 }

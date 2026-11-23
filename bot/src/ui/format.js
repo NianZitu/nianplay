@@ -6,12 +6,19 @@ function formatTime(secs) {
   return h ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}` : `${m}:${String(s).padStart(2, '0')}`
 }
 
-// "90", "1:30", "1:02:03" → seconds (null if invalid)
+// Time typed by the user → seconds (null if invalid). Accepts:
+//   "90"  "1:30"  "1:02:03"  "3m15s"  "3m 15s"  "1h2m3s"  "45s"  "2m"  "2min"  "1h"  "1h30" (= 1h30m)
 function parseTime(text) {
-  const t = (text || '').trim()
+  const t = (text || '').trim().toLowerCase().replace(/\s+/g, '')
+  if (!t) return null
   if (/^\d+$/.test(t)) return Number(t)
-  if (!/^\d+(:\d{1,2}){1,2}$/.test(t)) return null
-  return t.split(':').map(Number).reduce((acc, n) => acc * 60 + n, 0)
+  if (/^\d+(:\d{1,2}){1,2}$/.test(t)) return t.split(':').map(Number).reduce((acc, n) => acc * 60 + n, 0)
+  const m = t.match(/^(?:(\d+)h)?(?:(\d+)m(?:in)?)?(?:(\d+)(s?))?$/)
+  if (!m || (m[1] === undefined && m[2] === undefined && m[3] === undefined)) return null
+  let [, h = 0, min = 0, rest = 0, sUnit] = m
+  // "1h30": a bare number right after the hours means minutes
+  if (m[1] !== undefined && m[2] === undefined && m[3] !== undefined && !sUnit) { min = rest; rest = 0 }
+  return Number(h) * 3600 + Number(min) * 60 + Number(rest)
 }
 
 const thumbnailOf = item => {

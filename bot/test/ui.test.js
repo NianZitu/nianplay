@@ -10,7 +10,7 @@ test('player controls respect Discord limits (1-5 buttons per row, max 5 rows)',
       assert.ok(rows.length >= 1 && rows.length <= 5)
       for (const row of rows) assert.ok(row.components.length >= 1 && row.components.length <= 5)
       const ids = rows.flatMap(r => r.components.map(c => c.custom_id))
-      assert.deepStrictEqual(ids.sort(), ['np:loop', 'np:previous', 'np:shuffle', 'np:skip', 'np:stop', 'np:toggle'])
+      assert.deepStrictEqual(ids.sort(), ['np:forward', 'np:loop', 'np:previous', 'np:rewind', 'np:shuffle', 'np:skip', 'np:stop', 'np:toggle'])
     }
   }
 })

@@ -117,3 +117,21 @@ test('prefetch follows /playnext, shuffle and loop modes', async () => {
   p.loop = 'track'
   assert.strictEqual(p._nextIndex(), 2)
 })
+
+test('seekBy moves from the current position, clamps at 0 and skips past the end', async () => {
+  const p = makePlayer()
+  await p.enqueue([item('a'), item('b')])
+  const cur = p.current
+  Object.assign(cur, { streamUrl: 'https://audio.test/a', streamUrlAt: Date.now(), duration: 200 })
+  let seekedTo = null
+  p.seek = async (t) => { seekedTo = t; return t }
+  Object.defineProperty(p, 'elapsed', { get: () => 100, configurable: true })
+  assert.deepStrictEqual(await p.seekBy(30), { at: 130 })
+  assert.deepStrictEqual(await p.seekBy(-150), { at: 0 })
+  let skipped = false
+  p.skip = async () => { skipped = true }
+  assert.deepStrictEqual(await p.seekBy(120), { skipped: true })
+  assert.ok(skipped)
+  cur.streamUrl = null
+  assert.strictEqual(await p.seekBy(10), false, 'still loading')
+})
